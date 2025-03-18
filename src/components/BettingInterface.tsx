@@ -15,6 +15,8 @@ interface BettingInterfaceProps {
   playerName: string;
 }
 
+type GameState = 'waiting' | 'betting' | 'bet_announced' | 'escrow_locked' | 'playing' | 'completed';
+
 const BettingInterface: React.FC<BettingInterfaceProps> = ({
   wallet,
   gameState,

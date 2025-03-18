@@ -1,16 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import { Chessboard } from 'react-chessboard';
 import { Chess } from 'chess.js';
-import GameDashboard from '../components/GameDashboard';
+import { GameDashboard } from '../components/GameDashboard';
 import BettingInterface from '../components/BettingInterface';
 import AIAgentPanel from '../components/AIAgentPanel';
 import LoadingComponent from '../components/LoadingComponent';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
 import { Types, AptosClient } from 'aptos';
+import { EscrowContractAdapter, EscrowStatus, DisputeResolution } from '../contracts/EscrowContractAdapter';
 
-// Define the game state type to fix type errors
-type GameState = 'waiting' | 'betting' | 'playing' | 'completed';
+// Define types at the top of the file
+type Winner = 'player1' | 'player2' | 'draw' | null;
+type GameState = 'waiting' | 'betting' | 'bet_announced' | 'escrow_locked' | 'playing' | 'completed';
 
 // Define player wallet info type
 interface PlayerWalletInfo {
@@ -37,8 +39,26 @@ export default function Home() {
   
   // Game management
   const [aiEnabled, setAiEnabled] = useState(true);
+  
+  // Escrow adapter for blockchain interactions
+  const escrowAdapter = useMemo(() => new EscrowContractAdapter(
+    'https://fullnode.testnet.aptoslabs.com/v1',
+    '0x1' // Default module address, would be replaced with actual deployed address
+  ), []);
+  
+  // Add escrow tracking properties 
+  const [useSimulationMode, setUseSimulationMode] = useState<boolean>(true); // Default to true since we're not really deploying
+  const [escrowLocked, setEscrowLocked] = useState<boolean>(false);
+  const [player1EscrowLocked, setPlayer1EscrowLocked] = useState<boolean>(false);
+  const [player2EscrowLocked, setPlayer2EscrowLocked] = useState<boolean>(false);
+  
   const [currentPlayer, setCurrentPlayer] = useState<'white' | 'black'>('white');
   const [activePlayerWallet, setActivePlayerWallet] = useState<1 | 2>(1); // Which player is connecting wallet
+  
+  // New state for escrow contract data
+  const [escrowAddress, setEscrowAddress] = useState<string | null>(null);
+  const [escrowStatus, setEscrowStatus] = useState<EscrowStatus>(EscrowStatus.PENDING);
+  const [escrowBalance, setEscrowBalance] = useState<number>(0);
   
   // Wallet adapter
   const { 
@@ -48,6 +68,9 @@ export default function Home() {
     connected, 
     signAndSubmitTransaction 
   } = useWallet();
+
+  // Add the winner state to the Home component
+  const [winner, setWinner] = useState<Winner>(null);
 
   // Get wallet balance
   const getAccountBalance = async (address: string): Promise<number> => {
@@ -69,131 +92,21 @@ export default function Home() {
     }
   };
 
-  // Effect to handle wallet changes
+  // Initialize escrow when both wallets are connected
   useEffect(() => {
-    // Disable automatic wallet connection handling to prevent interference
-    // This useEffect was automatically connecting Player 1, which conflicts with our manual wallet management
-    // Keeping it empty but keeping the dependencies to maintain React rules
-  }, [connected, account, player1Wallet, player2Wallet]); // Run when connection state changes
-
-  // Connect wallet for specific player
-  const connectPlayerWallet = async (playerNumber: 1 | 2) => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      setActivePlayerWallet(playerNumber);
+    if (player1Wallet && player2Wallet && !escrowAddress && !isLoading) {
+      console.log("Both wallets connected, initializing escrow");
       
-      // Make sure there's a global aptos object
-      if (typeof window === 'undefined' || !window.aptos) {
-        setError("Petra wallet is not installed. Please install the Petra wallet extension from https://petra.app/ and refresh the page.");
-        setIsLoading(false);
-        return;
+      // In simulation mode, create a simulated escrow automatically
+      if (useSimulationMode) {
+        createSimulatedEscrow();
       }
-
-      console.log("Wallet adapter state before connection:", { connected, account });
-      
-      // Try direct connection to Petra if the adapter isn't working
-      try {
-        // Add delay before attempting connection
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        console.log(`Connecting wallet for Player ${playerNumber}...`);
-        
-        // If already connected, just use the current account
-        if (connected && account && account.address) {
-          console.log("Using already connected wallet:", account.address.toString());
-        } else {
-          // First try connecting via the wallet adapter
-          await connect('Petra');
-          console.log("Connection attempt completed");
-        }
-        
-        // Allow time for connection to register
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        console.log("Wallet adapter state after connection:", { connected, account });
-        
-        // If still not connected, try direct connection via window.aptos
-        if (!connected || !account || !account.address) {
-          console.log("Adapter connect failed, trying direct window.aptos connection...");
-          
-          // Try to connect directly via window.aptos if available
-          if (window.aptos) {
-            try {
-              const response = await window.aptos.connect();
-              console.log("Direct Petra connection response:", response);
-              
-              if (response && response.address) {
-                console.log("Direct connection succeeded with address:", response.address);
-                
-                // Create a wallet object from the direct connection
-                const walletInfo: PlayerWalletInfo = {
-                  address: response.address,
-                  balance: await getAccountBalance(response.address)
-                };
-                
-                // Set the wallet without relying on the adapter
-                if (playerNumber === 1) {
-                  setPlayer1Wallet(walletInfo);
-                } else {
-                  setPlayer2Wallet(walletInfo);
-                }
-                
-                // Return early since we've handled this manually
-                setIsLoading(false);
-                return;
-              }
-            } catch (directError) {
-              console.error("Error with direct Petra connection:", directError);
-            }
-          }
-          
-          // If we get here, both connection methods failed
-          throw new Error('Failed to connect wallet. Please make sure your wallet is unlocked and try again.');
-        }
-      } catch (connectError) {
-        console.error("Connection error:", connectError);
-        throw new Error(`Failed to connect wallet: ${connectError.message || 'Unknown error'}`);
-      }
-      
-      // If we get here, the connection was successful via adapter
-      const walletAddress = account.address.toString();
-      console.log(`Connected to wallet: ${walletAddress}`);
-      
-      // Check if this wallet is already assigned to another player
-      if (playerNumber === 1 && player2Wallet && player2Wallet.address === walletAddress) {
-        throw new Error("This wallet is already connected as Player 2. Please use a different wallet.");
-      } else if (playerNumber === 2 && player1Wallet && player1Wallet.address === walletAddress) {
-        throw new Error("This wallet is already connected as Player 1. Please use a different wallet.");
-      }
-      
-      // Get wallet balance
-      const balance = await getAccountBalance(walletAddress);
-      
-      // Create wallet info object
-      const walletInfo: PlayerWalletInfo = {
-        address: walletAddress,
-        balance: balance
-      };
-      
-      // Set the wallet for the appropriate player
-      console.log(`Setting wallet for Player ${playerNumber}: ${walletAddress}`);
-      if (playerNumber === 1) {
-        setPlayer1Wallet(walletInfo);
-      } else {
-        setPlayer2Wallet(walletInfo);
-      }
-      
-    } catch (error: any) {
-      console.error(`Error connecting wallet for Player ${playerNumber}:`, error);
-      setError(error.message || `Failed to connect wallet for Player ${playerNumber}`);
-    } finally {
-      setIsLoading(false);
+      // In real mode, don't auto-initialize to avoid unexpected reconnection prompts
+      // User will need to click the Initialize Escrow button
     }
-  };
+  }, [player1Wallet, player2Wallet, escrowAddress, isLoading, useSimulationMode]);
 
-  // Function to reset wallet connections
+  // Function to reset wallet connections - moved to the top to fix reference error
   const resetWalletConnections = async () => {
     try {
       setIsLoading(true);
@@ -210,6 +123,10 @@ export default function Home() {
       setPlayer1Bet(0);
       setPlayer2Bet(0);
       setFinalBetAmount(0);
+      setEscrowLocked(false);
+      setPlayer1EscrowLocked(false);
+      setPlayer2EscrowLocked(false);
+      setEscrowAddress(null);
       
       console.log("Wallet connections reset successfully");
     } catch (error) {
@@ -220,26 +137,538 @@ export default function Home() {
     }
   };
 
-  // Create escrow transaction payload
-  const createBetPayload = (amount: number, recipientAddress: string) => {
-    // Convert APT to Octas (smallest unit) - 1 APT = 10^8 Octas
-    const amountInOctas = (amount * 100000000).toString();
-    
-    return {
-      type: "entry_function_payload",
-      function: "0x1::coin::transfer",
-      type_arguments: ["0x1::aptos_coin::AptosCoin"],
-      arguments: [recipientAddress, amountInOctas]
-    } as any; // Type assertion to avoid TypeScript errors
+  // Function to initialize the escrow contract
+  const initializeEscrow = async () => {
+    if (!player1Wallet || !player2Wallet) {
+      console.error("Cannot initialize escrow: both players must be connected");
+      setError("Both players must be connected to initialize the escrow");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      console.log("Initializing escrow contract");
+
+      // In simulation mode, just set a fake address
+      if (useSimulationMode) {
+        try {
+          const simulatedAddress = 'simulated_escrow_' + Date.now();
+          console.log("Creating simulated escrow with address:", simulatedAddress);
+          
+          // Set the address in the adapter
+          escrowAdapter.setEscrowAddress(simulatedAddress);
+          
+          // Set the address in our component state
+          setEscrowAddress(simulatedAddress);
+          
+          console.log("Simulated escrow initialized with address:", simulatedAddress);
+          
+          // Add a small delay to ensure state updates
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Double check that the address was set
+          if (!escrowAddress) {
+            console.log("Escrow address state not updated yet, but continuing...");
+          }
+          
+          setIsLoading(false);
+          return;
+        } catch (simError) {
+          console.error("Error in simulation mode:", simError);
+          // Continue to try real mode, but log the error
+        }
+      }
+
+      // Try connecting to Player 1's wallet
+      console.log("Attempting to connect to Player 1's wallet for escrow initialization");
+      // If Player 1 is connected through wallet adapter, make sure we're using that
+      if (account && account.address && account.address.toString() === player1Wallet.address) {
+        console.log("Using connected wallet adapter for escrow creation");
+        
+        const createEscrowResult = await escrowAdapter.createEscrow(
+          { signAndSubmitTransaction: signAndSubmitTransaction }, // Use the adapter
+          player1Wallet.address,
+          player2Wallet.address,
+          0.1, // Minimum bet of 0.1 APT
+          player1Wallet.address, // Use player 1 as arbiter (in a real app, this would be a neutral third party)
+          24 * 60 * 60 // 24 hour timeout
+        );
+        
+        if (createEscrowResult) {
+          setEscrowAddress(createEscrowResult);
+          console.log("Escrow contract created with address:", createEscrowResult);
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // If adapter didn't work, try the direct window.aptos method
+      if (window.aptos) {
+        try {
+          console.log("Connecting to wallet via window.aptos for escrow creation");
+          
+          // Check if already connected to the right wallet
+          let currentAccount = null;
+          try {
+            currentAccount = await window.aptos.account();
+          } catch (e) {
+            console.log("No account currently connected, will need to connect");
+          }
+          
+          // Only show prompt and connect if not already connected to Player 1's wallet
+          if (!currentAccount || currentAccount.address !== player1Wallet.address) {
+            console.log("Not connected to Player 1's wallet, requesting connection");
+            window.alert("Please make sure Player 1's wallet is selected in your Petra extension to initialize the escrow.");
+            await window.aptos.connect();
+          } else {
+            console.log("Already connected to Player 1's wallet, proceeding without reconnection");
+          }
+          
+          // Ensure it's Player 1's wallet
+          const account = await window.aptos.account();
+          if (account && account.address === player1Wallet.address) {
+            console.log("Connected to correct wallet, creating escrow");
+            
+            const createEscrowResult = await escrowAdapter.createEscrow(
+              window.aptos,
+              player1Wallet.address,
+              player2Wallet.address,
+              0.1, // Minimum bet of 0.1 APT
+              player1Wallet.address, // Use player 1 as arbiter
+              24 * 60 * 60 // 24 hour timeout
+            );
+            
+            if (createEscrowResult) {
+              setEscrowAddress(createEscrowResult);
+              console.log("Escrow contract created with address:", createEscrowResult);
+              setIsLoading(false);
+              return;
+            }
+          } else {
+            console.warn("Connected to wrong wallet address:", account?.address);
+            throw new Error(`Wrong wallet connected. Expected ${player1Wallet.address} but got ${account?.address}. Please make sure Player 1's wallet is selected.`);
+          }
+        } catch (error) {
+          console.error("Error with direct Petra connection:", error);
+          throw error;
+        }
+      } else {
+        throw new Error("Petra wallet extension not found. Please install Petra and reload the page.");
+      }
+
+    } catch (error: any) {
+      console.error("Error initializing escrow:", error);
+      setError(error.message || "Failed to initialize escrow");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Place player bet with actual transaction
-  async function placePlayerBet(playerNumber: 1 | 2, amount: number) {
+  // Remove the complex wallet address checking and replace ensureCorrectWalletConnected with a simpler version
+  async function ensureCorrectWalletConnected(playerNumber: 1 | 2) {
+    console.log(`Ensuring wallet for Player ${playerNumber} is connected`);
+    
+    // If in simulation mode, just return true
+    if (useSimulationMode) {
+      console.log("Simulation mode: Assuming wallet is connected");
+      return true;
+    }
+    
+    // For Player 1 or Player 2, simply try to connect via window.aptos
+    try {
+      console.log(`Attempting to connect to Player ${playerNumber}'s wallet`);
+      
+      // Prompt user to switch to the correct wallet
+      window.alert(`Please make sure Player ${playerNumber}'s wallet is selected in your Petra extension.`);
+      
+      const response = await window.aptos.connect();
+      if (response && response.address) {
+        console.log(`Connected to wallet with address: ${response.address}`);
+        return true;
+      } else {
+        console.error("Failed to get wallet address");
+        return false;
+      }
+    } catch (error) {
+      console.error(`Error connecting to Player ${playerNumber}'s wallet:`, error);
+      return false;
+    }
+  }
+
+  // Update the connectPlayerWallet function to show correct prompts based on player number
+  const connectPlayerWallet = async (playerNumber: 1 | 2) => {
+    // Prevent multiple connection attempts
+    if (isLoading) {
+      console.log("Connection already in progress, ignoring duplicate request");
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
     
     try {
-      console.log(`Starting bet placement for Player ${playerNumber} with amount ${amount} APT`);
+      console.log(`Connecting wallet for Player ${playerNumber}...`);
+      
+      // Make sure there's a global aptos object
+      if (typeof window === 'undefined' || !window.aptos) {
+        setError("Petra wallet is not installed. Please install the Petra wallet extension from https://petra.app/ and refresh the page.");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Check if this player's wallet is already connected
+      const playerWallet = playerNumber === 1 ? player1Wallet : player2Wallet;
+      if (playerWallet) {
+        console.log(`Player ${playerNumber}'s wallet is already connected:`, playerWallet.address);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Show the correct prompt based on player number
+      window.alert(`Please make sure Player ${playerNumber}'s wallet is selected in your Petra extension.`);
+      
+      // Direct connection approach - simplest and most reliable
+      try {
+        const response = await window.aptos.connect();
+        console.log(`Wallet connection response for Player ${playerNumber}:`, response);
+        
+        if (response && response.address) {
+          console.log(`Connected to wallet for Player ${playerNumber}:`, response.address);
+          
+          // Check if this wallet is already connected as the other player
+          const otherPlayerWallet = playerNumber === 1 ? player2Wallet : player1Wallet;
+          if (otherPlayerWallet && otherPlayerWallet.address === response.address) {
+            const confirmUse = window.confirm(
+              `WARNING: This wallet (${response.address.substring(0, 6)}...${response.address.substring(response.address.length - 4)}) is already connected as Player ${playerNumber === 1 ? '2' : '1'}.\n\n` +
+              `Using the same wallet for both players is NOT recommended for real games.\n\n` +
+              `Do you want to continue using this wallet for both players?`
+            );
+            
+            if (!confirmUse) {
+              throw new Error(`Please connect a different wallet for Player ${playerNumber}. Go to your Petra extension and switch accounts first.`);
+            }
+            
+            console.log(`User confirmed using the same wallet for both players: ${response.address}`);
+          }
+          
+          // Get wallet balance
+          const balance = await getAccountBalance(response.address);
+          
+          // Set the wallet in state
+          const walletInfo: PlayerWalletInfo = {
+            address: response.address,
+            balance: balance
+          };
+          
+          if (playerNumber === 1) {
+            setPlayer1Wallet(walletInfo);
+          } else {
+            setPlayer2Wallet(walletInfo);
+          }
+          
+          console.log(`Successfully set Player ${playerNumber}'s wallet`);
+        } else {
+          throw new Error("Failed to get wallet address");
+        }
+      } catch (error: any) {
+        console.error(`Error connecting wallet for Player ${playerNumber}:`, error);
+        throw new Error(`Failed to connect wallet: ${error.message || 'Unknown error'}`);
+      }
+      
+    } catch (error: any) {
+      console.error(`Error in wallet connection for Player ${playerNumber}:`, error);
+      setError(error.message || `Failed to connect wallet for Player ${playerNumber}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Add a function to set the escrow wallet - this would be a third wallet
+  const connectEscrowWallet = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      console.log("Connecting escrow wallet...");
+      
+      if (typeof window === 'undefined' || !window.aptos) {
+        setError("Petra wallet is not installed. Please install the Petra wallet extension.");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Prompt to select the escrow wallet
+      window.alert("Please make sure your ESCROW wallet is selected in your Petra extension.");
+      
+      const response = await window.aptos.connect();
+      console.log("Escrow wallet connection response:", response);
+      
+      if (response && response.address) {
+        console.log("Connected to escrow wallet:", response.address);
+        
+        // Set the escrow address in the adapter
+        escrowAdapter.setEscrowAddress(response.address);
+        
+        // Set the address in component state
+        setEscrowAddress(response.address);
+        
+        console.log("Escrow wallet set successfully:", response.address);
+      } else {
+        throw new Error("Failed to get escrow wallet address");
+      }
+      
+    } catch (error: any) {
+      console.error("Error connecting escrow wallet:", error);
+      setError(error.message || "Failed to connect escrow wallet");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Update payWinner function to use the escrow wallet to pay the winner
+  async function payWinner(winner: Winner) {
+    try {
+      console.log(`Paying winner: ${winner}`);
+      
+      // Only proceed if not in simulation mode and escrow is locked
+      if (!useSimulationMode && escrowLocked && escrowAddress) {
+        // Handle draw case
+        if (winner === 'draw') {
+          console.log("Draw game - returning funds to both players");
+          
+          // For a draw, return original bet amounts to each player
+          // Connect to escrow wallet first
+          window.alert("Please select the ESCROW wallet in your Petra extension to return funds.");
+          const escrowWalletConnected = await window.aptos.connect();
+          
+          if (!escrowWalletConnected || escrowWalletConnected.address !== escrowAddress) {
+            throw new Error("Failed to connect to escrow wallet. Please ensure the correct wallet is selected.");
+          }
+          
+          // Return funds to Player 1
+          if (player1Wallet) {
+            console.log(`Returning ${player1Bet} APT to Player 1 from escrow`);
+            const payload1 = {
+              type: "entry_function_payload",
+              function: "0x1::coin::transfer",
+              type_arguments: ["0x1::aptos_coin::AptosCoin"],
+              arguments: [player1Wallet.address, Math.floor(player1Bet * 100000000).toString()]
+            };
+            
+            const txResponse1 = await window.aptos.signAndSubmitTransaction(payload1);
+            console.log("Player 1 refund transaction:", txResponse1);
+          }
+          
+          // Return funds to Player 2
+          if (player2Wallet) {
+            console.log(`Returning ${player2Bet} APT to Player 2 from escrow`);
+            const payload2 = {
+              type: "entry_function_payload",
+              function: "0x1::coin::transfer",
+              type_arguments: ["0x1::aptos_coin::AptosCoin"],
+              arguments: [player2Wallet.address, Math.floor(player2Bet * 100000000).toString()]
+            };
+            
+            const txResponse2 = await window.aptos.signAndSubmitTransaction(payload2);
+            console.log("Player 2 refund transaction:", txResponse2);
+          }
+        } 
+        // Handle winner case
+        else {
+          const winnerWallet = winner === 'player1' ? player1Wallet : player2Wallet;
+          
+          if (!winnerWallet) {
+            throw new Error("Winner wallet not found");
+          }
+          
+          console.log(`Transferring ${finalBetAmount} APT to winner (${winnerWallet.address})`);
+          
+          // Connect to escrow wallet
+          window.alert("Please select the ESCROW wallet in your Petra extension to pay the winner.");
+          const escrowWalletConnected = await window.aptos.connect();
+          
+          if (!escrowWalletConnected || escrowWalletConnected.address !== escrowAddress) {
+            throw new Error("Failed to connect to escrow wallet. Please ensure the correct wallet is selected.");
+          }
+          
+          // Transfer all funds from escrow to winner
+          const payload = {
+            type: "entry_function_payload",
+            function: "0x1::coin::transfer",
+            type_arguments: ["0x1::aptos_coin::AptosCoin"],
+            arguments: [winnerWallet.address, Math.floor(finalBetAmount * 100000000).toString()]
+          };
+          
+          const txResponse = await window.aptos.signAndSubmitTransaction(payload);
+          console.log("Winner payment transaction:", txResponse);
+        }
+        
+        // Update player balances after transfers
+        if (player1Wallet) {
+          const newBalance1 = await getAccountBalance(player1Wallet.address);
+          setPlayer1Wallet({
+            ...player1Wallet,
+            balance: newBalance1
+          });
+        }
+        
+        if (player2Wallet) {
+          const newBalance2 = await getAccountBalance(player2Wallet.address);
+          setPlayer2Wallet({
+            ...player2Wallet,
+            balance: newBalance2
+          });
+        }
+      } 
+      // Simulation mode handling
+      else if (useSimulationMode) {
+        if (winner === 'draw') {
+          console.log("Draw game - both players receive their bets back (simulation)");
+          
+          if (player1Wallet) {
+            setPlayer1Wallet({
+              ...player1Wallet,
+              balance: player1Wallet.balance + player1Bet
+            });
+          }
+          
+          if (player2Wallet) {
+            setPlayer2Wallet({
+              ...player2Wallet,
+              balance: player2Wallet.balance + player2Bet
+            });
+          }
+        } else {
+          const payoutAmount = finalBetAmount;
+          
+          if (winner === 'player1' && player1Wallet) {
+            console.log(`Updating Player 1 wallet balance: +${payoutAmount} APT (simulation)`);
+            setPlayer1Wallet({
+              ...player1Wallet,
+              balance: player1Wallet.balance + payoutAmount
+            });
+          } else if (winner === 'player2' && player2Wallet) {
+            console.log(`Updating Player 2 wallet balance: +${payoutAmount} APT (simulation)`);
+            setPlayer2Wallet({
+              ...player2Wallet,
+              balance: player2Wallet.balance + payoutAmount
+            });
+          }
+        }
+      }
+      
+      console.log("Winner payment completed successfully");
+    } catch (error: any) {
+      console.error("Error paying winner:", error);
+      setError(error.message || "Failed to pay winner");
+    }
+  }
+
+  // Reset game state
+  function resetGameState() {
+    console.log("Resetting game state");
+    setGameState('waiting');
+    setPlayer1Bet(0);
+    setPlayer2Bet(0);
+    setPlayer1EscrowLocked(false);
+    setPlayer2EscrowLocked(false);
+    setEscrowLocked(false);
+    setFinalBetAmount(0);
+    setEscrowStatus(EscrowStatus.PENDING);
+    setEscrowBalance(0);
+    setWinner(null);
+    
+    // Reset the game board
+    setGame(new Chess());
+    
+    // Reset current player
+    setCurrentPlayer('white');
+    
+    console.log("Game state reset complete");
+  }
+
+  // Check if both wallets are connected
+  const bothWalletsConnected = player1Wallet && player2Wallet;
+  
+  // Check if it's the betting phase and which player needs to bet
+  const needsPlayer1Bet = gameState === 'betting' && player1Bet === 0 && player2Bet > 0;
+  const needsPlayer2Bet = gameState === 'betting' && player2Bet === 0 && player1Bet > 0;
+
+  // Add helper function to explain wallet connection steps
+  const getWalletConnectionInstructions = (playerNumber: 1 | 2) => {
+    if (playerNumber === 1) {
+      return "Connect your first wallet by clicking the button below.";
+    } else {
+      return "To connect Player 2's wallet:\n1. Open your Petra wallet extension\n2. Switch to a DIFFERENT wallet account (important!)\n3. Click 'Connect Player 2 Wallet'\n\nUsing the same wallet for both players is not recommended for real games.";
+    }
+  };
+
+  // Force disconnect before connecting Player 2
+  const connectPlayer2Wallet = async () => {
+    // First try to disconnect any connected wallet
+    if (connected) {
+      console.log("Force disconnecting before connecting Player 2's wallet");
+      try {
+        await disconnect();
+        // Wait for disconnection to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (e) {
+        console.warn("Error during forced disconnection:", e);
+      }
+    }
+    
+    // Check if Player 1 wallet is connected and provide specific instructions
+    if (player1Wallet) {
+      const walletPreface = player1Wallet.address.substring(0, 6) + "..." + 
+                           player1Wallet.address.substring(player1Wallet.address.length - 4);
+      
+      // Show detailed instructions for switching wallets
+      window.alert(
+        `IMPORTANT: Before connecting Player 2's wallet\n\n` +
+        `1. Open your Petra wallet extension\n` +
+        `2. Currently, Player 1 is using wallet: ${walletPreface}\n` +
+        `3. Switch to a DIFFERENT account in your Petra wallet\n` +
+        `4. Then click OK to continue connecting`
+      );
+    }
+    
+    // Now try to connect Player 2's wallet
+    connectPlayerWallet(2);
+  };
+
+  // Early return for error state
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="p-6 bg-red-50 border border-red-200 rounded-lg max-w-lg mx-auto">
+          <h2 className="text-xl font-bold text-red-800 mb-2">Error</h2>
+          <p className="text-red-600 mb-4">{error}</p>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => setError(null)}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Dismiss
+            </button>
+            <button 
+              onClick={resetWalletConnections}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              Reset Wallet Connections
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Announce player bet - this just records the bet amount without transferring funds
+  async function announcePlayerBet(playerNumber: 1 | 2, amount: number) {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      console.log(`Player ${playerNumber} announces a bet of ${amount} APT`);
       
       // Check if player wallet is connected
       const currentWallet = playerNumber === 1 ? player1Wallet : player2Wallet;
@@ -247,245 +676,413 @@ export default function Home() {
         throw new Error(`Player ${playerNumber} wallet not connected`);
       }
       
-      console.log(`Using wallet with address: ${currentWallet.address}`);
-      
-      // Determine recipient
-      const recipientWallet = playerNumber === 1 ? player2Wallet : player1Wallet;
-      if (!recipientWallet) {
-        throw new Error("Cannot place bet: Both players must be connected");
-      }
-      
-      const recipientAddress = recipientWallet.address;
-      console.log(`Recipient address: ${recipientAddress}`);
-      
-      // SIMPLIFIED WALLET CONNECTION CHECK
-      let isCorrectWalletConnected = false;
-      
-      // Check if a wallet is connected and it's the right one
-      if (connected && account && account.address && 
-          account.address.toString() === currentWallet.address) {
-        console.log("Correct wallet is already connected");
-        isCorrectWalletConnected = true;
-      } else {
-        console.log("Need to connect the correct wallet");
-        
-        // First try to disconnect if another wallet is connected
-        if (connected) {
-          console.log("Disconnecting current wallet first");
-          try {
-            await disconnect();
-            // Brief pause to allow disconnection to complete
-            await new Promise(resolve => setTimeout(resolve, 300));
-          } catch (disconnectError) {
-            console.warn("Error during disconnection:", disconnectError);
-            // Continue anyway - we'll try to connect
-          }
-        }
-        
-        // Try connecting with the wallet adapter first
-        try {
-          console.log("Connecting via wallet adapter");
-          await connect('Petra');
-          await new Promise(resolve => setTimeout(resolve, 500)); // Wait for connection
-          
-          // Check if we connected to the correct wallet
-          if (account && account.address && 
-              account.address.toString() === currentWallet.address) {
-            console.log("Successfully connected to the correct wallet");
-            isCorrectWalletConnected = true;
-          } else {
-            console.log("Connected to wrong wallet or connection failed");
-          }
-        } catch (connectError) {
-          console.warn("Wallet adapter connection failed:", connectError);
-        }
-        
-        // If wallet adapter failed, try direct connection
-        if (!isCorrectWalletConnected && window.aptos) {
-          try {
-            console.log("Trying direct wallet connection");
-            const response = await window.aptos.connect();
-            console.log("Direct wallet connection response:", response);
-            
-            if (response && response.address === currentWallet.address) {
-              console.log("Direct connection successful");
-              isCorrectWalletConnected = true;
-            } else {
-              console.log(`Connected to ${response?.address || 'unknown'}, needed ${currentWallet.address}`);
-            }
-          } catch (directError) {
-            console.error("Direct wallet connection failed:", directError);
-          }
-        }
-      }
-      
-      // Check if we have a connected wallet
-      if (!isCorrectWalletConnected) {
-        throw new Error("Please make sure the correct wallet is connected and unlocked. You may need to select the correct account in your wallet.");
-      }
-      
-      // IMPROVED TRANSACTION HANDLING
-      // Validate player has enough funds before attempting transaction
-      console.log(`Player ${playerNumber} balance: ${currentWallet.balance} APT, attempting to bet ${amount} APT`);
+      // Make sure player has enough funds
       if (currentWallet.balance < amount) {
         throw new Error(`Insufficient funds. You need at least ${amount} APT to place this bet.`);
       }
       
-      // Create transaction payload with extensive logging
-      console.log("Creating transaction payload...");
-      try {
-        // Convert APT to Octas (smallest unit) - 1 APT = 10^8 Octas
-        const amountInOctas = Math.floor(amount * 100000000).toString();
-        console.log(`Amount in Octas: ${amountInOctas}`);
+      // Set the bet amount in state
+      if (playerNumber === 1) {
+        setPlayer1Bet(amount);
+      } else {
+        setPlayer2Bet(amount);
+      }
+      
+      // Update game state to betting
+      setGameState('betting');
+      
+      console.log("Bet recorded successfully");
+      
+    } catch (error: any) {
+      console.error(`Error announcing bet for Player ${playerNumber}:`, error);
+      setError(error.message || `Failed to announce bet for Player ${playerNumber}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // Lock the escrow by transferring the minimum bet amount from a specific player
+  async function lockEscrow(playerNumber: 1 | 2) {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      console.log(`Starting escrow locking process for Player ${playerNumber}`);
+      console.log(`Current escrow lock status: Player 1: ${player1EscrowLocked}, Player 2: ${player2EscrowLocked}`);
+      
+      // Verify both players have placed bets
+      if (player1Bet <= 0 || player2Bet <= 0) {
+        throw new Error("Both players must announce bets before locking escrow");
+      }
+      
+      // Determine the bet amount for this player
+      const betAmount = playerNumber === 1 ? player1Bet : player2Bet;
+      console.log(`Player ${playerNumber} bet amount: ${betAmount} APT`);
+      
+      // Get player wallet
+      const playerWallet = playerNumber === 1 ? player1Wallet : player2Wallet;
+      if (!playerWallet) {
+        throw new Error(`Player ${playerNumber} wallet not connected`);
+      }
+      
+      // In simulation mode, create an escrow if not yet initialized
+      if (useSimulationMode && !escrowAddress) {
+        console.log("No escrow initialized yet, but in simulation mode. Creating escrow now...");
+        const simulatedAddress = 'simulated_escrow_' + Date.now();
+        escrowAdapter.setEscrowAddress(simulatedAddress);
+        setEscrowAddress(simulatedAddress);
+        console.log("Auto-created simulated escrow with address:", simulatedAddress);
         
-        const payload = {
-          type: "entry_function_payload",
-          function: "0x1::coin::transfer",
-          type_arguments: ["0x1::aptos_coin::AptosCoin"],
-          arguments: [recipientAddress, amountInOctas]
-        };
+        // Brief pause to let state update
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      // Make sure an escrow address is set
+      if (!escrowAddress) {
+        throw new Error("No escrow wallet connected. Please connect the escrow wallet first.");
+      }
+      
+      console.log(`Depositing ${betAmount} APT to escrow contract from Player ${playerNumber}`);
+      
+      // Use simulation mode if enabled
+      if (useSimulationMode) {
+        console.log("Using simulation mode - no actual transfer will occur");
         
-        console.log("Transaction payload created:", JSON.stringify(payload));
+        // Simulate deposit
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
         
-        // Submit transaction with enhanced error handling
-        console.log("Attempting to submit transaction...");
-        let txHash = "";
-        
-        // First try the wallet adapter method
-        if (connected && account && typeof signAndSubmitTransaction === 'function') {
-          try {
-            console.log("Using wallet adapter signAndSubmitTransaction");
-            const response = await signAndSubmitTransaction(payload as any);
-            
-            if (response && response.hash) {
-              txHash = response.hash;
-              console.log(`Transaction submitted via adapter with hash: ${txHash}`);
-            } else {
-              console.error("Adapter transaction response missing hash:", response);
-              throw new Error("Transaction failed: No transaction hash returned from adapter");
-            }
-          } catch (adapterError) {
-            console.error("Adapter transaction submission failed:", adapterError);
-            
-            // Fall back to direct method
-            if (window.aptos && typeof window.aptos.signAndSubmitTransaction === 'function') {
-              console.log("Falling back to direct window.aptos.signAndSubmitTransaction");
-              try {
-                const directResponse = await window.aptos.signAndSubmitTransaction(payload);
-                
-                if (directResponse && directResponse.hash) {
-                  txHash = directResponse.hash;
-                  console.log(`Transaction submitted via direct method with hash: ${txHash}`);
-                } else {
-                  console.error("Direct transaction response missing hash:", directResponse);
-                  throw new Error("Transaction failed: No transaction hash returned from direct method");
-                }
-              } catch (directError) {
-                console.error("Direct transaction submission failed:", directError);
-                throw directError; // Re-throw to be caught by the outer catch
-              }
-            } else {
-              // No fallback available, re-throw the adapter error
-              throw adapterError;
-            }
-          }
-        } 
-        // If adapter not available, try direct method
-        else if (window.aptos && typeof window.aptos.signAndSubmitTransaction === 'function') {
-          console.log("Adapter not available, using direct window.aptos.signAndSubmitTransaction");
-          try {
-            const directResponse = await window.aptos.signAndSubmitTransaction(payload);
-            
-            if (directResponse && directResponse.hash) {
-              txHash = directResponse.hash;
-              console.log(`Transaction submitted via direct method with hash: ${txHash}`);
-            } else {
-              console.error("Direct transaction response missing hash:", directResponse);
-              throw new Error("Transaction failed: No transaction hash returned from direct method");
-            }
-          } catch (directError) {
-            console.error("Direct transaction submission failed:", directError);
-            throw directError;
-          }
+        // Update UI state
+        if (playerNumber === 1) {
+          setPlayer1EscrowLocked(true);
+          setPlayer1Wallet({
+            ...playerWallet,
+            balance: playerWallet.balance - betAmount
+          });
         } else {
-          throw new Error("No transaction submission method available. Please make sure your wallet is properly connected.");
+          setPlayer2EscrowLocked(true);
+          setPlayer2Wallet({
+            ...playerWallet,
+            balance: playerWallet.balance - betAmount
+          });
         }
         
-        // Wait for transaction confirmation with better error handling
-        if (txHash) {
-          try {
-            console.log(`Waiting for transaction ${txHash} to be confirmed...`);
-            const txResult = await client.waitForTransactionWithResult(txHash);
-            console.log("Transaction confirmed:", txResult);
-            
-            // Check if transaction was successful - using a type-safe approach
-            // @ts-ignore - Handle potential type mismatch in transaction result
-            if (txResult && typeof txResult.success === 'boolean' && txResult.success === false) {
-              console.error("Transaction failed on chain:", txResult);
-              throw new Error("Transaction failed on chain. Please check your wallet for details.");
-            }
-          } catch (confirmError) {
-            console.warn("Error confirming transaction:", confirmError);
-            console.log("Continuing despite confirmation error (transaction may still be processing)");
-            // Don't throw here - the transaction might still be processing
-          }
-          
-          // Update state even if confirmation failed - transaction was submitted
-          console.log(`Updating Player ${playerNumber} bet state...`);
-          if (playerNumber === 1) {
-            setPlayer1Bet(amount);
-            // Update wallet balance
-            setPlayer1Wallet({
-              ...player1Wallet,
-              balance: player1Wallet.balance - amount
-            });
-          } else {
-            setPlayer2Bet(amount);
-            // Update wallet balance
-            setPlayer2Wallet({
-              ...player2Wallet,
-              balance: player2Wallet.balance - amount
-            });
-          }
-          
-          // Check if both players have placed bets
-          if ((playerNumber === 1 && player2Bet > 0) || (playerNumber === 2 && player1Bet > 0)) {
-            console.log("Both players have placed bets. Starting game...");
-            const otherPlayerBet = playerNumber === 1 ? player2Bet : player1Bet;
-            startGameWithBets(playerNumber === 1 ? amount : otherPlayerBet, playerNumber === 1 ? otherPlayerBet : amount);
-          } else {
-            // Only one player has bet so far
-            console.log("Waiting for other player to place bet...");
-            setGameState('betting');
-          }
-          
-          console.log("Bet placement completed successfully");
-        } else {
-          throw new Error("Failed to get transaction hash. Please try again.");
+        console.log(`Simulated escrow lock successful for Player ${playerNumber}`);
+        
+        // Update escrow balance in simulation mode
+        setEscrowBalance(prevBalance => prevBalance + betAmount);
+      } else {
+        // Real deposit by transferring funds to the escrow address
+        // Make sure the player's wallet is connected
+        const isWalletConnected = await ensureCorrectWalletConnected(playerNumber);
+        if (!isWalletConnected) {
+          throw new Error(`Please connect the wallet for Player ${playerNumber} to continue`);
         }
-      } catch (txError: any) {
-        console.error("Transaction error:", txError);
-        throw new Error(`Transaction failed: ${txError.message || 'Unknown error'}`);
+        
+        // Direct transfer to escrow address
+        const transferSuccess = await transferToEscrow(playerNumber, betAmount, escrowAddress);
+        
+        if (!transferSuccess) {
+          throw new Error(`Failed to transfer funds to escrow for Player ${playerNumber}`);
+        }
+        
+        // Update UI state
+        if (playerNumber === 1) {
+          setPlayer1EscrowLocked(true);
+          
+          // Refresh balance
+          const newBalance = await getAccountBalance(playerWallet.address);
+          setPlayer1Wallet({
+            ...playerWallet,
+            balance: newBalance
+          });
+        } else {
+          setPlayer2EscrowLocked(true);
+          
+          // Refresh balance
+          const newBalance = await getAccountBalance(playerWallet.address);
+          setPlayer2Wallet({
+            ...playerWallet,
+            balance: newBalance
+          });
+        }
+        
+        console.log(`Escrow lock successful for Player ${playerNumber}`);
+        
+        // Update escrow balance - in real mode, we'd query the contract
+        const escrowBalanceResult = await getAccountBalance(escrowAddress);
+        setEscrowBalance(escrowBalanceResult);
+      }
+      
+      // Now check if both players have locked their escrow
+      if (playerNumber === 1 ? player2EscrowLocked : player1EscrowLocked) {
+        console.log("Both players have deposited funds to escrow. Starting game...");
+        
+        // Get the minimum bet (which determines the pool)
+        const minBet = Math.min(player1Bet, player2Bet);
+        const finalPoolAmount = minBet * 2;
+        
+        console.log(`Setting final bet amount to ${finalPoolAmount} APT (min of ${player1Bet} and ${player2Bet} × 2)`);
+        setFinalBetAmount(finalPoolAmount);
+        setEscrowLocked(true);
+        
+        // Start the game with a slight delay to ensure UI updates
+        setTimeout(() => {
+          console.log("Transitioning game state to 'playing'");
+          setGameState('playing');
+          setEscrowStatus(EscrowStatus.PLAYING);
+        }, 500);
+      } else {
+        console.log(`Waiting for the other player to lock their escrow`);
       }
     } catch (error: any) {
-      console.error(`Error placing bet for Player ${playerNumber}:`, error);
-      setError(error.message || `Failed to place bet for Player ${playerNumber}`);
+      console.error(`Error locking escrow for Player ${playerNumber}:`, error);
+      setError(error.message || `Failed to lock escrow for Player ${playerNumber}`);
     } finally {
       setIsLoading(false);
     }
   }
   
-  function startGameWithBets(bet1: number, bet2: number) {
-    // AI agent determines the lower bet amount
-    const lowerBet = Math.min(bet1, bet2);
-    setFinalBetAmount(lowerBet * 2);
+  // Check if both players have locked their escrow and start the game if they have
+  function checkAndStartGame() {
+    console.log("Checking escrow lock status:", { 
+      player1Locked: player1EscrowLocked, 
+      player2Locked: player2EscrowLocked,
+      currentGameState: gameState
+    });
     
-    console.log(`Both players have placed bets. Pool amount: ${lowerBet * 2} APT`);
-    
-    // Start the game
-    setGameState('playing');
+    if (player1EscrowLocked && player2EscrowLocked) {
+      console.log("Both players have locked their escrow. Starting game...");
+      
+      // Set final bet amount (the pool)
+      const minBetAmount = Math.min(player1Bet, player2Bet);
+      console.log(`Setting final bet amount to ${minBetAmount * 2} APT (min of ${player1Bet} and ${player2Bet})`);
+      
+      setFinalBetAmount(minBetAmount * 2);
+      setEscrowLocked(true);
+      setGameState('playing');
+      console.log("Game state set to 'playing'");
+    }
   }
 
+  // Helper function to transfer funds from a player to the escrow
+  async function transferToEscrow(playerNumber: 1 | 2, amount: number, targetAddress: string) {
+    console.log(`Transferring ${amount} APT from Player ${playerNumber} to ${targetAddress}`);
+    
+    const playerWallet = playerNumber === 1 ? player1Wallet : player2Wallet;
+    if (!playerWallet) {
+      throw new Error(`Player ${playerNumber} wallet not connected`);
+    }
+    
+    // For testing only - simulation mode doesn't do actual transfers
+    if (useSimulationMode) {
+      console.log("Using simulation mode for escrow transfer (no actual funds will be moved)");
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Mock transaction delay
+      return true;
+    }
+    
+    // Need to make sure the correct wallet is connected
+    console.log(`Ensuring correct wallet is connected for Player ${playerNumber}`);
+    const isCorrectWalletConnected = await ensureCorrectWalletConnected(playerNumber);
+    if (!isCorrectWalletConnected) {
+      throw new Error(`Please connect the wallet for Player ${playerNumber} to continue`);
+    }
+    
+    console.log("Wallet correctly connected, preparing transaction");
+    
+    // Validate target address
+    if (!targetAddress || targetAddress.trim() === '') {
+      console.error("Invalid target address:", targetAddress);
+      throw new Error("Invalid recipient address. Unable to process transfer.");
+    }
+    
+    // Convert amount to octas
+    const amountInOctas = Math.floor(amount * 100000000).toString();
+    console.log(`Amount in Octas: ${amountInOctas}`);
+    
+    // Create payload
+    const payload = {
+      type: "entry_function_payload",
+      function: "0x1::coin::transfer",
+      type_arguments: ["0x1::aptos_coin::AptosCoin"],
+      arguments: [targetAddress, amountInOctas]
+    };
+    
+    console.log("Transaction payload created:", JSON.stringify(payload));
+    
+    // Submit the transaction - try direct method first for more reliable popup display
+    try {
+      let txHash = "";
+      
+      // Try direct Petra method first - often more reliable for showing the popup
+      if (window.aptos && typeof window.aptos.signAndSubmitTransaction === 'function') {
+        console.log("Using direct Petra wallet for transaction - this should trigger the popup");
+        try {
+          // Force focus on current window to help popup appear
+          window.focus();
+          
+          const response = await window.aptos.signAndSubmitTransaction(payload);
+          console.log("Direct transaction response:", response);
+          if (response && response.hash) {
+            txHash = response.hash;
+            console.log("Transaction hash received:", txHash);
+          } else {
+            console.error("Direct transaction response missing hash:", response);
+          }
+        } catch (directError) {
+          console.error("Direct transaction error:", directError);
+          if (directError.message) {
+            throw new Error(`Transaction failed: ${directError.message}`);
+          }
+        }
+      }
+      
+      // Fall back to adapter if direct method didn't work
+      if (!txHash && connected && account && typeof signAndSubmitTransaction === 'function') {
+        console.log("Falling back to wallet adapter for transaction");
+        try {
+          const response = await signAndSubmitTransaction(payload as any);
+          console.log("Adapter transaction response:", response);
+          if (response && response.hash) {
+            txHash = response.hash;
+            console.log("Transaction hash received from adapter:", txHash);
+          } else {
+            console.error("Adapter transaction response missing hash:", response);
+          }
+        } catch (adapterError) {
+          console.error("Adapter transaction error:", adapterError);
+          if (adapterError.message) {
+            throw new Error(`Transaction failed: ${adapterError.message}`);
+          }
+        }
+      }
+      
+      // If we still don't have a hash, the transaction failed
+      if (!txHash) {
+        throw new Error("Transaction failed. Make sure your wallet is unlocked and has sufficient funds.");
+      }
+      
+      // Wait for transaction confirmation
+      console.log(`Transaction submitted with hash: ${txHash}`);
+      
+      try {
+        console.log("Waiting for transaction confirmation...");
+        const txResult = await client.waitForTransactionWithResult(txHash);
+        console.log(`Transfer for Player ${playerNumber} confirmed:`, txResult);
+        return true;
+      } catch (confirmError) {
+        console.warn("Error confirming transaction:", confirmError);
+        // Transaction might still go through, so we'll consider this a success
+        console.log("Continuing despite confirmation error (transaction may still be processing)");
+        return true;
+      }
+    } catch (txError: any) {
+      console.error(`Error in transfer for Player ${playerNumber}:`, txError);
+      if (txError.message) {
+        throw new Error(`Failed to transfer funds: ${txError.message}`);
+      } else {
+        throw new Error("Failed to transfer funds. Please check your wallet and try again.");
+      }
+    }
+  }
+
+  // Restore startNewGame function
+  function startNewGame() {
+    setGame(new Chess());
+    resetGameState();
+    setCurrentPlayer('white');
+  }
+
+  // Restore forfeitGame function
+  async function forfeitGame(playerNumber: 1 | 2) {
+    if (gameState !== 'playing') {
+      console.log("Can only forfeit during an active game");
+      return;
+    }
+    
+    setGameState('completed');
+    
+    // Determine the winner (opposite of the player who forfeited)
+    const winner = playerNumber === 1 ? 'player2' : 'player1';
+    console.log(`Player ${playerNumber} forfeited. ${winner === 'player1' ? 'Player 1' : 'Player 2'} wins!`);
+    
+    // Handle the game end with the determined winner
+    await handleGameEnd(winner);
+  }
+
+  // Add connect/disconnect wallet functions
+  const connectWallet = (playerNumber: 1 | 2) => {
+    connectPlayerWallet(playerNumber);
+  };
+
+  const disconnectWallet = (playerNumber: 1 | 2) => {
+    if (playerNumber === 1) {
+      setPlayer1Wallet(null);
+    } else {
+      setPlayer2Wallet(null);
+    }
+    disconnect();
+  };
+
+  // Add a manual wallet address setter function
+  const setManualWalletAddress = (playerNumber: 1 | 2) => {
+    // Prompt user for wallet address
+    const address = window.prompt(`Enter wallet address for Player ${playerNumber}:`);
+    
+    if (!address || address.trim() === '') {
+      console.log("No address provided, cancelling manual wallet setup");
+      return;
+    }
+    
+    try {
+      console.log(`Setting manual wallet address for Player ${playerNumber}: ${address}`);
+      
+      // Create wallet info with the provided address
+      // We'll assume a balance of 10 APT for testing purposes
+      const walletInfo: PlayerWalletInfo = {
+        address: address.trim(),
+        balance: 10 // Default balance for testing
+      };
+      
+      // Set the wallet for the appropriate player
+      if (playerNumber === 1) {
+        setPlayer1Wallet(walletInfo);
+      } else {
+        setPlayer2Wallet(walletInfo);
+      }
+      
+      // If this is being done in simulation mode, update the corresponding escrow setup
+      if (useSimulationMode && playerNumber === 1 && player2Wallet) {
+        console.log("Both players now have wallets, attempting to initialize escrow");
+        // Use a timeout to allow state to update
+        setTimeout(() => {
+          initializeEscrow();
+        }, 500);
+      }
+      
+    } catch (error: any) {
+      console.error(`Error setting manual wallet for Player ${playerNumber}:`, error);
+      setError(error.message || `Failed to set manual wallet for Player ${playerNumber}`);
+    }
+  };
+
+  // Function to create a simulated escrow (for debugging/testing)
+  const createSimulatedEscrow = () => {
+    if (!useSimulationMode) {
+      setError("Please enable simulation mode first");
+      return;
+    }
+    
+    console.log("Creating a simulated escrow for testing");
+    const simulatedAddress = 'simulated_escrow_' + Date.now();
+    escrowAdapter.setEscrowAddress(simulatedAddress);
+    setEscrowAddress(simulatedAddress);
+    console.log("Created simulated escrow with address:", simulatedAddress);
+    
+    // Also set escrow status to PENDING
+    setEscrowStatus(EscrowStatus.PENDING);
+  };
+
+  // Add missing chess functions
   function makeAMove(move: any) {
     const gameCopy = new Chess(game.fen());
     
@@ -536,433 +1133,438 @@ export default function Home() {
     return true;
   }
 
-  // Pay the winner by transferring the bet amount
-  async function payWinner(winnerAddress: string, amount: number) {
-    try {
-      setIsLoading(true);
-      console.log(`Starting payment to winner ${winnerAddress} with amount ${amount} APT`);
-      
-      // Validate inputs
-      if (!winnerAddress || winnerAddress.trim() === '') {
-        console.error("Invalid winner address");
-        return; // Silently return instead of showing error to user
-      }
-      
-      if (amount <= 0) {
-        console.error("Invalid payment amount:", amount);
-        return; // Silently return instead of showing error to user
-      }
-      
-      // Create transaction payload
-      const amountInOctas = Math.floor(amount * 100000000).toString();
-      console.log(`Amount in Octas: ${amountInOctas}`);
-      
-      const payload = {
-        type: "entry_function_payload",
-        function: "0x1::coin::transfer",
-        type_arguments: ["0x1::aptos_coin::AptosCoin"],
-        arguments: [winnerAddress, amountInOctas]
-      };
-      
-      console.log("Winner payment payload created:", JSON.stringify(payload));
-      
-      // Submit transaction with enhanced error handling
-      console.log("Attempting to submit winner payment transaction...");
-      let txHash = "";
-      let transactionSucceeded = false;
-      
-      // Try transaction submission
-      try {
-        // First try the wallet adapter if available
-        if (connected && account && typeof signAndSubmitTransaction === 'function') {
-          console.log("Using wallet adapter for winner payment");
-          const response = await signAndSubmitTransaction(payload as any);
-          
-          if (response && response.hash) {
-            txHash = response.hash;
-            console.log(`Winner payment transaction submitted via adapter with hash: ${txHash}`);
-            transactionSucceeded = true;
-          } else {
-            console.warn("Adapter transaction response missing hash:", response);
-            // Don't throw, try direct method
-          }
-        }
-        
-        // If adapter failed or not available, try direct method
-        if (!transactionSucceeded && window.aptos && typeof window.aptos.signAndSubmitTransaction === 'function') {
-          console.log("Using direct Petra wallet for winner payment");
-          const directResponse = await window.aptos.signAndSubmitTransaction(payload);
-          
-          if (directResponse && directResponse.hash) {
-            txHash = directResponse.hash;
-            console.log(`Winner payment transaction submitted directly with hash: ${txHash}`);
-            transactionSucceeded = true;
-          } else {
-            console.warn("Direct transaction response missing hash:", directResponse);
-          }
-        }
-        
-        // If we have a hash, wait for confirmation
-        if (txHash) {
-          try {
-            console.log(`Waiting for winner payment transaction ${txHash} to be confirmed...`);
-            const txResult = await client.waitForTransactionWithResult(txHash);
-            console.log("Winner payment transaction confirmed:", txResult);
-          } catch (confirmError) {
-            console.warn("Error confirming winner payment transaction:", confirmError);
-            console.log("Continuing despite confirmation error (transaction may still be processing)");
-            // Don't throw - transaction was submitted and might still process
-          }
-          
-          console.log(`Payment to winner ${winnerAddress} completed: ${amount} APT`);
-        } else if (!transactionSucceeded) {
-          console.error("No transaction hash returned for winner payment");
-          // Don't throw error to user - handle silently
-        }
-      } catch (txError) {
-        console.error("Winner payment transaction error:", txError);
-        // Only log the error, don't show to user since this is part of game completion
-      }
-    } catch (error: any) {
-      // Only log the error, don't display to user
-      console.error('Error in payWinner function:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleGameEnd() {
+  // Handle game end function
+  async function handleGameEnd(winnerParam?: Winner) {
     setGameState('completed');
     
-    // AI agent facilitates the payout
-    if (aiEnabled && finalBetAmount > 0) {
-      // Determine the winner and distribute the bet
-      let winner;
-      let winnerAddress = '';
-      
+    // Determine the winner if not provided
+    let currentWinner = winnerParam;
+    
+    if (!currentWinner) {
+      // Determine winner based on the chess game state
       if (game.isDraw()) {
-        winner = 'draw';
-        // In a draw, refund half to each player
-        console.log('Game ended in a draw. Refunding bets.');
-        if (player1Wallet && player2Wallet) {
-          await payWinner(player1Wallet.address, finalBetAmount / 2);
-          await payWinner(player2Wallet.address, finalBetAmount / 2);
-        }
+        currentWinner = 'draw';
       } else {
         // White wins if it's not black's turn (checkmate)
-        winner = game.turn() === 'b' ? 'white' : 'black';
-        winnerAddress = winner === 'white' 
-          ? (player1Wallet ? player1Wallet.address : '')
-          : (player2Wallet ? player2Wallet.address : '');
-          
-        console.log(`Game ended. Winner: ${winner}, address: ${winnerAddress}`);
-        
-        if (winnerAddress && finalBetAmount > 0) {
-          // Pay the winner
-          await payWinner(winnerAddress, finalBetAmount);
-        }
+        currentWinner = game.turn() === 'b' ? 'player1' : 'player2';
       }
     }
-  }
+    
+    setWinner(currentWinner);
+    console.log(`Game ended with winner: ${currentWinner}`);
 
-  // Handle forfeit with payout to the other player
-  async function forfeitGame(playerNumber: 1 | 2) {
-    if (gameState !== 'playing') {
-      console.log("Can only forfeit during an active game");
-      return;
+    // Only update escrow and pay winner if escrow was locked (real game played)
+    if (escrowLocked) {
+      try {
+        // Update UI state
+        setEscrowStatus(EscrowStatus.COMPLETED);
+        
+        // Pay winner
+        await payWinner(currentWinner);
+        
+      } catch (error: any) {
+        console.error("Error handling game end with escrow:", error);
+        setError(error.message || "Failed to complete game settlement");
+      }
     }
-    
-    setGameState('completed');
-    
-    // Determine the winner (opposite of the player who forfeited)
-    const winner = playerNumber === 1 ? 'black' : 'white';
-    const winnerAddress = winner === 'white'
-      ? (player1Wallet ? player1Wallet.address : '')
-      : (player2Wallet ? player2Wallet.address : '');
-      
-    console.log(`Player ${playerNumber} forfeited. ${winner === 'white' ? 'Player 1' : 'Player 2'} wins!`);
-    
-    // AI agent facilitates the payout to the winner
-    if (aiEnabled && finalBetAmount > 0 && winnerAddress) {
-      await payWinner(winnerAddress, finalBetAmount);
-    }
-  }
 
-  function startNewGame() {
-    setGame(new Chess());
-    setGameState('waiting');
-    setPlayer1Bet(0);
-    setPlayer2Bet(0);
-    setFinalBetAmount(0);
-    setCurrentPlayer('white');
-  }
-
-  // Check if both wallets are connected
-  const bothWalletsConnected = player1Wallet && player2Wallet;
-  
-  // Check if it's the betting phase and which player needs to bet
-  const needsPlayer1Bet = gameState === 'betting' && player1Bet === 0 && player2Bet > 0;
-  const needsPlayer2Bet = gameState === 'betting' && player2Bet === 0 && player1Bet > 0;
-
-  // Early return for error state
-  if (error) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="p-6 bg-red-50 border border-red-200 rounded-lg max-w-lg mx-auto">
-          <h2 className="text-xl font-bold text-red-800 mb-2">Error</h2>
-          <p className="text-red-600 mb-4">{error}</p>
-          <div className="flex gap-3">
-            <button 
-              onClick={() => setError(null)}
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-            >
-              Dismiss
-            </button>
-            <button 
-              onClick={resetWalletConnections}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-            >
-              Reset Wallet Connections
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+    // Reset game state after a delay to allow any animations to complete
+    setTimeout(() => {
+      resetGameState();
+    }, 3000);
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <Head>
-        <title>Chess GameFi - Aptos</title>
-        <meta name="description" content="Chess GameFi with AI Agent P2P Betting on Aptos" />
+        <title>Chess Game with Aptos</title>
+        <meta name="description" content="Play chess with Aptos blockchain integration" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <header className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-secondary mb-2">Chess GameFi</h1>
-        <p className="text-lg text-gray-600">Aptos Chess with AI-Facilitated Betting</p>
-      </header>
+      <h1 className="text-3xl font-bold text-center mb-8">Chess Game with Aptos</h1>
+
+      {/* Error message */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <strong>Error: </strong> {error}
+          <button 
+            onClick={() => setError(null)}
+            className="ml-4 px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {isLoading ? (
-        <LoadingComponent message="Processing blockchain transaction..." />
+        <div className="flex justify-center items-center p-8">
+          <div className="bg-white p-6 rounded shadow-lg">
+            <p className="text-lg font-semibold">Processing...</p>
+            <p className="text-gray-600">Please wait while your transaction is being processed.</p>
+          </div>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <div className="chess-board">
-              <Chessboard 
-                position={game.fen()} 
-                onPieceDrop={onDrop} 
-                boardOrientation={'white'} // Always show white's perspective
-              />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Left panel - Player 1 */}
+          <div className="bg-gray-100 p-4 rounded shadow">
+            <h2 className="text-xl font-bold mb-4">Player 1 (White)</h2>
             
-            <GameDashboard 
-              gameState={gameState}
-              startNewGame={startNewGame}
-              game={game}
-              currentTurn={currentPlayer}
-              player1Wallet={player1Wallet ? { address: player1Wallet.address } : null}
-              player2Wallet={player2Wallet ? { address: player2Wallet.address } : null}
-            />
-            
-            {/* Quit Game Options - Only show during active game */}
-            {gameState === 'playing' && (
-              <div className="mt-6 grid grid-cols-2 gap-4">
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h3 className="text-lg font-bold mb-2">Player 1 (White)</h3>
-                  <button 
-                    onClick={() => forfeitGame(1)}
-                    className="w-full py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            {player1Wallet ? (
+              <div>
+                <p className="mb-2">
+                  <span className="font-semibold">Address:</span>{' '}
+                  <span title={player1Wallet.address} className="cursor-help">{player1Wallet.address.substring(0, 6)}...{player1Wallet.address.substring(player1Wallet.address.length - 4)}</span>
+                </p>
+                <p className="mb-4">
+                  <span className="font-semibold">Balance:</span> {player1Wallet.balance} APT
+                </p>
+                <div className="flex space-x-2 mb-4">
+                  <button
+                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                    onClick={() => disconnectWallet(1)}
                   >
-                    Forfeit Game
+                    Disconnect
                   </button>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Forfeiting will award the win to Player 2
-                    {finalBetAmount > 0 && ` and transfer the bet of ${finalBetAmount.toFixed(4)} APT`}
-                  </p>
-                </div>
-                
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h3 className="text-lg font-bold mb-2">Player 2 (Black)</h3>
-                  <button 
-                    onClick={() => forfeitGame(2)}
-                    className="w-full py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                  >
-                    Forfeit Game
-                  </button>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Forfeiting will award the win to Player 1
-                    {finalBetAmount > 0 && ` and transfer the bet of ${finalBetAmount.toFixed(4)} APT`}
-                  </p>
+                  {useSimulationMode && (
+                    <button
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded"
+                      onClick={() => setManualWalletAddress(1)}
+                    >
+                      Edit Address
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
-          
-          <div className="lg:col-span-1">
-            {/* Player 1 Wallet Connection */}
-            <div className="betting-card mb-6">
-              <h2 className="text-xl font-bold mb-2">Player 1 (White)</h2>
-              {!player1Wallet ? (
-                <div>
-                  <p className="mb-4">Connect Player 1's Petra wallet to place bets and play</p>
-                  <button 
-                    onClick={() => connectPlayerWallet(1)}
-                    className="btn-primary w-full"
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600 mb-2">{getWalletConnectionInstructions(1)}</p>
+                <button
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded block w-full"
+                  onClick={() => connectWallet(1)}
+                >
+                  Connect Player 1 Wallet
+                </button>
+                {useSimulationMode && (
+                  <button
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded block w-full"
+                    onClick={() => setManualWalletAddress(1)}
                   >
-                    Connect Player 1 Wallet
+                    Set Manual Address
                   </button>
-                </div>
-              ) : (
-                <div className="flex flex-col">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm truncate">
-                      {player1Wallet.address.slice(0, 6)}...{player1Wallet.address.slice(-4)}
-                    </span>
-                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Connected</span>
-                  </div>
-                  <div className="text-sm">
-                    <strong>Balance:</strong> {player1Wallet.balance.toFixed(4)} APT
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Player 2 Wallet Connection */}
-            <div className="betting-card mb-6">
-              <h2 className="text-xl font-bold mb-2">Player 2 (Black)</h2>
-              {!player2Wallet ? (
-                <div>
-                  <p className="mb-4">Connect Player 2's Petra wallet to place bets and play</p>
-                  <button 
-                    onClick={() => connectPlayerWallet(2)}
-                    className="btn-primary w-full"
-                    disabled={!player1Wallet} // Require Player 1 to connect first
-                  >
-                    Connect Player 2 Wallet
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm truncate">
-                      {player2Wallet.address.slice(0, 6)}...{player2Wallet.address.slice(-4)}
-                    </span>
-                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Connected</span>
-                  </div>
-                  <div className="text-sm">
-                    <strong>Balance:</strong> {player2Wallet.balance.toFixed(4)} APT
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Betting Interface */}
-            {bothWalletsConnected && (gameState === 'waiting' || gameState === 'betting') && (
-              <div className="betting-card mb-6">
-                <h2 className="text-2xl font-bold mb-4">Betting</h2>
-                
-                {needsPlayer1Bet ? (
-                  <div className="p-3 bg-yellow-100 rounded-lg mb-4">
-                    <p className="text-sm font-medium">Player 2 has bet {player2Bet.toFixed(4)} APT</p>
-                    <p className="text-sm">Player 1 needs to place their bet</p>
-                  </div>
-                ) : needsPlayer2Bet ? (
-                  <div className="p-3 bg-yellow-100 rounded-lg mb-4">
-                    <p className="text-sm font-medium">Player 1 has bet {player1Bet.toFixed(4)} APT</p>
-                    <p className="text-sm">Player 2 needs to place their bet</p>
-                  </div>
-                ) : null}
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <BettingInterface 
-                    wallet={player1Wallet}
-                    gameState={gameState}
-                    betAmount={player1Bet}
-                    opponentBet={player2Bet}
-                    placeBet={(amount) => placePlayerBet(1, amount)}
-                    disabled={player1Bet > 0}
-                    playerName="Player 1"
-                  />
-                  
-                  <BettingInterface 
-                    wallet={player2Wallet}
-                    gameState={gameState}
-                    betAmount={player2Bet}
-                    opponentBet={player1Bet}
-                    placeBet={(amount) => placePlayerBet(2, amount)}
-                    disabled={player2Bet > 0}
-                    playerName="Player 2"
-                  />
-                </div>
-                
-                {gameState === 'betting' && (
-                  <div className="mt-4 p-3 bg-primary/10 rounded-lg border border-primary/30">
-                    <p className="text-center text-sm font-medium">
-                      Waiting for {needsPlayer1Bet ? 'Player 1' : 'Player 2'} to place their bet
-                    </p>
-                  </div>
                 )}
               </div>
             )}
-            
-            {/* Game Status */}
-            {gameState === 'playing' && (
-              <div className="betting-card mb-6">
-                <h2 className="text-2xl font-bold mb-4">Game in Progress</h2>
-                <div className="p-4 bg-primary/10 rounded-lg border border-primary/30 mb-4">
-                  <div className="text-sm font-semibold text-center mb-1">Total Pool</div>
-                  <div className="text-2xl font-bold text-center">
-                    {finalBetAmount.toFixed(4)} APT
-                  </div>
-                  <div className="text-xs text-center text-gray-600 mt-1">
-                    (Based on the lower bet amount)
-                  </div>
-                </div>
-                
-                <div className="p-3 bg-yellow-100 rounded-lg">
-                  <p className="text-center font-medium">
-                    Current Turn: {currentPlayer === 'white' ? 'Player 1 (White)' : 'Player 2 (Black)'}
-                  </p>
-                </div>
+
+            {gameState === 'waiting' && player1Wallet && (
+              <div className="mt-4">
+                <label className="block mb-2">
+                  <span className="font-semibold">Bet Amount (APT):</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={player1Bet}
+                    onChange={(e) => setPlayer1Bet(parseFloat(e.target.value))}
+                    className="ml-2 p-1 border rounded"
+                  />
+                </label>
+                <button
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+                  onClick={() => announcePlayerBet(1, player1Bet)}
+                  disabled={!player1Wallet || player1Bet <= 0}
+                >
+                  Announce Bet
+                </button>
               </div>
             )}
-            
-            {/* Game Result */}
+
+            {gameState === 'betting' && player1Bet > 0 && !player1EscrowLocked && (
+              <div className="mt-4">
+                <p className="mb-2">
+                  <span className="font-semibold">Your Bet:</span> {player1Bet} APT
+                </p>
+                <button
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+                  onClick={() => lockEscrow(1)}
+                  disabled={!player1Wallet || player1EscrowLocked}
+                >
+                  Lock Your Escrow
+                </button>
+                <p className="text-sm text-gray-600 mt-2">
+                  {player1EscrowLocked ? 'Your escrow is locked!' : 'Lock your escrow to proceed with the game'}
+                </p>
+              </div>
+            )}
+
+            {player1EscrowLocked && (
+              <div className="mt-2 bg-green-100 p-2 rounded">
+                <p className="text-green-700">Escrow locked successfully!</p>
+              </div>
+            )}
+          </div>
+
+          {/* Middle panel - Game */}
+          <div className="bg-white p-4 rounded shadow">
+            <div className="mb-4">
+              <GameDashboard
+                gameState={gameState}
+                player1Wallet={player1Wallet}
+                player2Wallet={player2Wallet}
+                player1Bet={player1Bet}
+                player2Bet={player2Bet}
+                player1EscrowLocked={player1EscrowLocked}
+                player2EscrowLocked={player2EscrowLocked}
+                escrowLocked={escrowLocked}
+                finalBetAmount={finalBetAmount}
+                winner={winner}
+              />
+            </div>
+
+            <div className="mb-4 aspect-square max-w-md mx-auto">
+              <Chessboard
+                position={game.fen()}
+                onPieceDrop={onDrop}
+                boardOrientation="white"
+              />
+            </div>
+
+            {gameState === 'playing' && (
+              <div className="text-center">
+                <p className="mb-2 text-lg font-semibold">
+                  Current Player: {currentPlayer === 'white' ? 'White (Player 1)' : 'Black (Player 2)'}
+                </p>
+                <p className="mb-4 text-gray-600">
+                  Total Pool: {finalBetAmount} APT
+                </p>
+                <button
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded mr-2"
+                  onClick={() => forfeitGame(currentPlayer === 'white' ? 1 : 2)}
+                >
+                  Forfeit
+                </button>
+              </div>
+            )}
+
             {gameState === 'completed' && (
-              <div className="betting-card mb-6">
-                <h2 className="text-2xl font-bold mb-4">Game Completed</h2>
-                
-                <div className="p-4 bg-accent/20 rounded-lg border border-accent/30 mb-4">
-                  <p className="text-center font-bold">
-                    {game.isDraw() 
-                      ? 'Game ended in a draw! Bets will be returned.'
-                      : `${game.turn() === 'b' ? 'Player 1 (White)' : 'Player 2 (Black)'} wins!`}
-                  </p>
-                  <p className="text-sm text-center mt-2">
-                    {game.isDraw() 
-                      ? 'Each player receives their original bet back.'
-                      : `Winner receives ${finalBetAmount.toFixed(4)} APT`}
-                  </p>
-                </div>
-                
-                <button 
+              <div className="text-center mt-4">
+                <h3 className="text-xl font-bold mb-2">
+                  {winner === 'draw' ? 'Game Ended in a Draw' : `${winner === 'player1' ? 'Player 1' : 'Player 2'} Wins!`}
+                </h3>
+                <p className="mb-4">
+                  {winner === 'draw' 
+                    ? 'Both players receive their bets back' 
+                    : `${winner === 'player1' ? 'Player 1' : 'Player 2'} receives ${finalBetAmount} APT`}
+                </p>
+                <button
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
                   onClick={startNewGame}
-                  className="btn-primary w-full"
                 >
                   Start New Game
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Right panel - Player 2 */}
+          <div className="bg-gray-100 p-4 rounded shadow">
+            <h2 className="text-xl font-bold mb-4">Player 2 (Black)</h2>
             
-            <AIAgentPanel 
-              aiEnabled={aiEnabled}
-              setAiEnabled={setAiEnabled}
-              gameState={gameState}
-            />
+            {player2Wallet ? (
+              <div>
+                <p className="mb-2">
+                  <span className="font-semibold">Address:</span>{' '}
+                  <span title={player2Wallet.address} className="cursor-help">{player2Wallet.address.substring(0, 6)}...{player2Wallet.address.substring(player2Wallet.address.length - 4)}</span>
+                </p>
+                <p className="mb-4">
+                  <span className="font-semibold">Balance:</span> {player2Wallet.balance} APT
+                </p>
+                <div className="flex space-x-2 mb-4">
+                  <button
+                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                    onClick={() => disconnectWallet(2)}
+                  >
+                    Disconnect
+                  </button>
+                  {useSimulationMode && (
+                    <button
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded"
+                      onClick={() => setManualWalletAddress(2)}
+                    >
+                      Edit Address
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="bg-yellow-50 border border-yellow-200 p-3 rounded text-sm">
+                  <p className="text-yellow-800 whitespace-pre-line font-medium">{getWalletConnectionInstructions(2)}</p>
+                </div>
+                <button
+                  className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded block w-full font-bold"
+                  onClick={connectPlayer2Wallet}
+                >
+                  Connect Player 2 Wallet
+                </button>
+                {useSimulationMode && (
+                  <button
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded block w-full"
+                    onClick={() => setManualWalletAddress(2)}
+                  >
+                    Set Manual Address
+                  </button>
+                )}
+              </div>
+            )}
+
+            {gameState === 'waiting' && player2Wallet && (
+              <div className="mt-4">
+                <label className="block mb-2">
+                  <span className="font-semibold">Bet Amount (APT):</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={player2Bet}
+                    onChange={(e) => setPlayer2Bet(parseFloat(e.target.value))}
+                    className="ml-2 p-1 border rounded"
+                  />
+                </label>
+                <button
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+                  onClick={() => announcePlayerBet(2, player2Bet)}
+                  disabled={!player2Wallet || player2Bet <= 0}
+                >
+                  Announce Bet
+                </button>
+              </div>
+            )}
+
+            {gameState === 'betting' && player2Bet > 0 && !player2EscrowLocked && (
+              <div className="mt-4">
+                <p className="mb-2">
+                  <span className="font-semibold">Your Bet:</span> {player2Bet} APT
+                </p>
+                <button
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+                  onClick={() => lockEscrow(2)}
+                  disabled={!player2Wallet || player2EscrowLocked}
+                >
+                  Lock Your Escrow
+                </button>
+                <p className="text-sm text-gray-600 mt-2">
+                  {player2EscrowLocked ? 'Your escrow is locked!' : 'Lock your escrow to proceed with the game'}
+                </p>
+              </div>
+            )}
+
+            {player2EscrowLocked && (
+              <div className="mt-2 bg-green-100 p-2 rounded">
+                <p className="text-green-700">Escrow locked successfully!</p>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Simulation mode toggle and contract status */}
+      <div className="mt-8 p-4 bg-gray-200 rounded">
+        <h3 className="text-lg font-bold mb-2">Contract Status</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p><strong>Escrow Address:</strong> {escrowAddress || 'Not connected'}</p>
+            <p><strong>Status:</strong> {EscrowStatus[escrowStatus]}</p>
+            <p><strong>Escrow Balance:</strong> {escrowBalance} APT</p>
+            
+            {/* Escrow wallet connection panel */}
+            <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded">
+              <h4 className="font-bold text-indigo-800">Escrow Wallet</h4>
+              {escrowAddress ? (
+                <div className="mt-2">
+                  <p className="text-indigo-700">Escrow wallet connected:</p>
+                  <p className="font-mono text-sm mt-1">{escrowAddress}</p>
+                  <button
+                    className="mt-2 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
+                    onClick={() => setEscrowAddress(null)}
+                  >
+                    Disconnect Escrow
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <p className="text-indigo-700 mb-2">Connect your escrow wallet:</p>
+                  <button
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded w-full"
+                    onClick={connectEscrowWallet}
+                    disabled={useSimulationMode}
+                  >
+                    Connect Escrow Wallet
+                  </button>
+                  <p className="text-xs text-indigo-600 mt-1">
+                    The escrow wallet will hold funds during the game and distribute to the winner.
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {/* Wallet Connection Tips */}
+            <div className="mt-4 p-2 bg-blue-50 border border-blue-200 rounded">
+              <p className="text-blue-800 font-medium">3-Wallet Setup Instructions:</p>
+              <ol className="list-decimal list-inside text-blue-700 pl-2 text-sm space-y-1 mt-1">
+                <li>Connect Player 1 wallet first</li>
+                <li>Connect Player 2 wallet second (make sure to switch to a different wallet in Petra)</li>
+                <li>Connect the Escrow wallet third (should be a separate wallet from both players)</li>
+                <li>Place bets and lock escrow to start the game</li>
+                <li>After game completes, the escrow wallet will pay the winner</li>
+              </ol>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="simulationMode"
+                checked={useSimulationMode}
+                onChange={(e) => setUseSimulationMode(e.target.checked)}
+                className="mr-2"
+              />
+              <label htmlFor="simulationMode">Simulation Mode (No real transactions)</label>
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              Enable simulation mode to test the game flow without actual blockchain transactions.
+            </p>
+            <div className="mt-2">
+              <button
+                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded mr-2"
+                onClick={initializeEscrow}
+                disabled={useSimulationMode || !escrowAddress || !player1Wallet || !player2Wallet}
+              >
+                Initialize Escrow
+              </button>
+              <button
+                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded mr-2"
+                onClick={createSimulatedEscrow}
+                disabled={!useSimulationMode}
+              >
+                Create Simulated Escrow
+              </button>
+              <button
+                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded mr-2"
+                onClick={resetGameState}
+              >
+                Reset Game
+              </button>
+              <button
+                className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded"
+                onClick={resetWalletConnections}
+              >
+                Reset All Wallets
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 

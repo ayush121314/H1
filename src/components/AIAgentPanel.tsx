@@ -1,18 +1,22 @@
 import React from 'react';
 
 // Define same GameState type as in other components
-type GameState = 'waiting' | 'betting' | 'playing' | 'completed';
+type GameState = 'waiting' | 'betting' | 'bet_announced' | 'escrow_locked' | 'playing' | 'completed';
 
 interface AIAgentPanelProps {
   aiEnabled: boolean;
   setAiEnabled: (enabled: boolean) => void;
   gameState: GameState;
+  useSimulationMode?: boolean;
+  setUseSimulationMode?: (enabled: boolean) => void;
 }
 
 const AIAgentPanel: React.FC<AIAgentPanelProps> = ({
   aiEnabled,
   setAiEnabled,
-  gameState
+  gameState,
+  useSimulationMode = false,
+  setUseSimulationMode
 }) => {
   const agentActions = [
     {
@@ -52,30 +56,104 @@ const AIAgentPanel: React.FC<AIAgentPanelProps> = ({
   };
 
   return (
-    <div className="betting-card">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">AI Agent</h2>
-        <div className="flex items-center">
-          <span className="mr-2 text-sm">Enabled</span>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={aiEnabled} 
-              onChange={(e) => setAiEnabled(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+    <div className="p-4 bg-white rounded-lg shadow-md">
+      <h2 className="text-xl font-bold mb-4">AI Agent Settings</h2>
+      
+      <div className="flex items-center justify-between">
+        <span className="font-medium">AI-Facilitated Betting</span>
+        <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+          <input
+            type="checkbox"
+            id="toggle"
+            className="absolute w-6 h-6 opacity-0 cursor-pointer z-10"
+            checked={aiEnabled}
+            onChange={(e) => {
+              if (gameState === 'waiting') {
+                setAiEnabled(e.target.checked);
+              }
+            }}
+            disabled={gameState !== 'waiting'}
+          />
+          <label
+            htmlFor="toggle"
+            className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${
+              aiEnabled ? 'bg-blue-500' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`toggle-dot absolute top-0 left-0 w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                aiEnabled ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            ></span>
           </label>
         </div>
       </div>
       
-      <div className="mb-3">
-        <h3 className="text-md font-semibold mb-2">Agent Status</h3>
-        <div className="flex items-center">
-          <div className={`w-3 h-3 rounded-full mr-2 ${aiEnabled ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-          <span>{aiEnabled ? 'Online' : 'Offline'}</span>
+      {setUseSimulationMode && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="font-medium">Simulation Mode</span>
+          <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+            <input
+              type="checkbox"
+              id="simulation-toggle"
+              className="absolute w-6 h-6 opacity-0 cursor-pointer z-10"
+              checked={useSimulationMode}
+              onChange={(e) => {
+                if (gameState === 'waiting') {
+                  setUseSimulationMode(e.target.checked);
+                }
+              }}
+              disabled={gameState !== 'waiting'}
+            />
+            <label
+              htmlFor="simulation-toggle"
+              className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${
+                useSimulationMode ? 'bg-green-500' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`toggle-dot absolute top-0 left-0 w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                  useSimulationMode ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              ></span>
+            </label>
+          </div>
         </div>
-      </div>
+      )}
+      
+      <p className="text-sm text-gray-600 mt-4">
+        {aiEnabled ? (
+          <>
+            AI agent is <span className="text-blue-500 font-medium">enabled</span>.
+            <br />
+            It will facilitate betting, escrow, and payout.
+          </>
+        ) : (
+          <>
+            AI agent is <span className="text-red-500 font-medium">disabled</span>.
+            <br />
+            Players will need to handle betting manually.
+          </>
+        )}
+      </p>
+      
+      {setUseSimulationMode && (
+        <p className="text-sm text-gray-600 mt-2">
+          {useSimulationMode ? (
+            <>
+              Simulation mode is <span className="text-green-500 font-medium">enabled</span>.
+              <br />
+              No actual funds will be transferred during testing.
+            </>
+          ) : (
+            <>
+              Simulation mode is <span className="text-red-500 font-medium">disabled</span>.
+              <br />
+              Real funds will be used for transactions.
+            </>
+          )}
+        </p>
+      )}
 
       <div>
         <h3 className="text-md font-semibold mb-2">Agent Functions</h3>
