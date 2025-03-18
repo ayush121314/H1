@@ -1,1 +1,12 @@
-{}
+{
+  "../node_modules/@aptos-labs/ts-sdk/dist/esm/chunk-HWNPKEOJ.mjs -> @aptos-labs/script-composer-pack": {
+    "id": "../node_modules/@aptos-labs/ts-sdk/dist/esm/chunk-HWNPKEOJ.mjs -> @aptos-labs/script-composer-pack",
+    "files": []
+  },
+  "../node_modules/@atomrigslab/aptos-wallet-adapter/dist/index.es.js -> ./index-DRmafxZ_.mjs": {
+    "id": "../node_modules/@atomrigslab/aptos-wallet-adapter/dist/index.es.js -> ./index-DRmafxZ_.mjs",
+    "files": [
+      "static/chunks/node_modules_atomrigslab_aptos-wallet-adapter_dist_index-DRmafxZ__mjs.js"
+    ]
+  }
+}
