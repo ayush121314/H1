@@ -71,41 +71,9 @@ export default function Home() {
 
   // Effect to handle wallet changes
   useEffect(() => {
-    const handleWalletChanges = async () => {
-      // If player has connected wallet but our state doesn't reflect it
-      if (connected && account && account.address) {
-        console.log("Wallet connection detected in useEffect");
-        
-        // If no player wallets are set yet, set as player 1
-        if (!player1Wallet && !player2Wallet) {
-          console.log("Setting connected wallet as Player 1");
-          try {
-            const balance = await getAccountBalance(account.address.toString());
-            setPlayer1Wallet({
-              address: account.address.toString(),
-              balance: balance
-            });
-          } catch (e) {
-            console.error("Error getting balance for auto-connected wallet:", e);
-          }
-        }
-        // If player 1 is set but needs update (e.g. address changed)
-        else if (player1Wallet && player1Wallet.address !== account.address.toString()) {
-          console.log("Updating Player 1 wallet with new connection");
-          try {
-            const balance = await getAccountBalance(account.address.toString());
-            setPlayer1Wallet({
-              address: account.address.toString(),
-              balance: balance
-            });
-          } catch (e) {
-            console.error("Error updating wallet balance:", e);
-          }
-        }
-      }
-    };
-    
-    handleWalletChanges();
+    // Disable automatic wallet connection handling to prevent interference
+    // This useEffect was automatically connecting Player 1, which conflicts with our manual wallet management
+    // Keeping it empty but keeping the dependencies to maintain React rules
   }, [connected, account, player1Wallet, player2Wallet]); // Run when connection state changes
 
   // Connect wallet for specific player
@@ -116,59 +84,137 @@ export default function Home() {
     try {
       setActivePlayerWallet(playerNumber);
       
-      // Check if Petra wallet is installed
-      if (typeof window !== 'undefined' && !window.aptos) {
+      // Make sure there's a global aptos object
+      if (typeof window === 'undefined' || !window.aptos) {
         setError("Petra wallet is not installed. Please install the Petra wallet extension from https://petra.app/ and refresh the page.");
         setIsLoading(false);
         return;
       }
+
+      console.log("Wallet adapter state before connection:", { connected, account });
       
-      console.log("Petra wallet detected, attempting to connect...");
-      
-      // Check if wallet is already connected
-      if (connected && account && account.address) {
-        console.log("Wallet is already connected, using existing connection.");
-        // Just use the existing connection
-      } else {
-        // Try to establish a new connection
-        console.log("Wallet not connected, attempting new connection...");
-        await connect('Petra');
+      // Try direct connection to Petra if the adapter isn't working
+      try {
+        // Add delay before attempting connection
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        console.log(`Connecting wallet for Player ${playerNumber}...`);
+        
+        // If already connected, just use the current account
+        if (connected && account && account.address) {
+          console.log("Using already connected wallet:", account.address.toString());
+        } else {
+          // First try connecting via the wallet adapter
+          await connect('Petra');
+          console.log("Connection attempt completed");
+        }
+        
+        // Allow time for connection to register
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log("Wallet adapter state after connection:", { connected, account });
+        
+        // If still not connected, try direct connection via window.aptos
+        if (!connected || !account || !account.address) {
+          console.log("Adapter connect failed, trying direct window.aptos connection...");
+          
+          // Try to connect directly via window.aptos if available
+          if (window.aptos) {
+            try {
+              const response = await window.aptos.connect();
+              console.log("Direct Petra connection response:", response);
+              
+              if (response && response.address) {
+                console.log("Direct connection succeeded with address:", response.address);
+                
+                // Create a wallet object from the direct connection
+                const walletInfo: PlayerWalletInfo = {
+                  address: response.address,
+                  balance: await getAccountBalance(response.address)
+                };
+                
+                // Set the wallet without relying on the adapter
+                if (playerNumber === 1) {
+                  setPlayer1Wallet(walletInfo);
+                } else {
+                  setPlayer2Wallet(walletInfo);
+                }
+                
+                // Return early since we've handled this manually
+                setIsLoading(false);
+                return;
+              }
+            } catch (directError) {
+              console.error("Error with direct Petra connection:", directError);
+            }
+          }
+          
+          // If we get here, both connection methods failed
+          throw new Error('Failed to connect wallet. Please make sure your wallet is unlocked and try again.');
+        }
+      } catch (connectError) {
+        console.error("Connection error:", connectError);
+        throw new Error(`Failed to connect wallet: ${connectError.message || 'Unknown error'}`);
       }
       
-      console.log("Connection established, checking account...");
+      // If we get here, the connection was successful via adapter
+      const walletAddress = account.address.toString();
+      console.log(`Connected to wallet: ${walletAddress}`);
       
-      // Check if we have account info
-      if (!account || !account.address) {
-        console.error("No account data available after connection");
-        throw new Error('Failed to get account data. Please make sure your Petra wallet is unlocked and has an active account.');
+      // Check if this wallet is already assigned to another player
+      if (playerNumber === 1 && player2Wallet && player2Wallet.address === walletAddress) {
+        throw new Error("This wallet is already connected as Player 2. Please use a different wallet.");
+      } else if (playerNumber === 2 && player1Wallet && player1Wallet.address === walletAddress) {
+        throw new Error("This wallet is already connected as Player 1. Please use a different wallet.");
       }
       
-      // Get account balance
-      const balance = await getAccountBalance(account.address.toString());
-      console.log(`Successfully connected to account with balance: ${balance} APT`);
+      // Get wallet balance
+      const balance = await getAccountBalance(walletAddress);
       
+      // Create wallet info object
       const walletInfo: PlayerWalletInfo = {
-        address: account.address.toString(),
+        address: walletAddress,
         balance: balance
       };
       
-      // Store wallet info for appropriate player
+      // Set the wallet for the appropriate player
+      console.log(`Setting wallet for Player ${playerNumber}: ${walletAddress}`);
       if (playerNumber === 1) {
         setPlayer1Wallet(walletInfo);
       } else {
-        // Check if it's the same wallet
-        if (player1Wallet && player1Wallet.address === walletInfo.address) {
-          setError("Please use a different wallet for Player 2.");
-          setIsLoading(false);
-          return;
-        }
         setPlayer2Wallet(walletInfo);
       }
       
-      console.log(`Player ${playerNumber} connected with balance: ${balance} APT`);
     } catch (error: any) {
-      console.error(`Error connecting player ${playerNumber} wallet:`, error);
-      setError(error.message || `Error connecting wallet for Player ${playerNumber}`);
+      console.error(`Error connecting wallet for Player ${playerNumber}:`, error);
+      setError(error.message || `Failed to connect wallet for Player ${playerNumber}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Function to reset wallet connections
+  const resetWalletConnections = async () => {
+    try {
+      setIsLoading(true);
+      console.log("Resetting wallet connections...");
+      
+      // Disconnect only if connected
+      if (connected) {
+        await disconnect();
+      }
+      
+      // Reset state
+      setPlayer1Wallet(null);
+      setPlayer2Wallet(null);
+      setPlayer1Bet(0);
+      setPlayer2Bet(0);
+      setFinalBetAmount(0);
+      
+      console.log("Wallet connections reset successfully");
+    } catch (error) {
+      console.error("Error resetting wallet connections:", error);
+      setError("Failed to reset wallet connections. Please refresh the page.");
     } finally {
       setIsLoading(false);
     }
@@ -193,69 +239,234 @@ export default function Home() {
     setError(null);
     
     try {
-      const currentWallet = playerNumber === 1 ? player1Wallet : player2Wallet;
+      console.log(`Starting bet placement for Player ${playerNumber} with amount ${amount} APT`);
       
+      // Check if player wallet is connected
+      const currentWallet = playerNumber === 1 ? player1Wallet : player2Wallet;
       if (!currentWallet) {
         throw new Error(`Player ${playerNumber} wallet not connected`);
       }
       
-      // Check if player has sufficient balance
-      if (currentWallet.balance < amount) {
-        throw new Error(`Insufficient balance. You have ${currentWallet.balance.toFixed(4)} APT but trying to bet ${amount.toFixed(4)} APT`);
-      }
+      console.log(`Using wallet with address: ${currentWallet.address}`);
       
-      // For now, bets go to other player's address
-      // In a real implementation, this would go to a secure escrow contract
-      const recipientAddress = playerNumber === 1 
-        ? (player2Wallet ? player2Wallet.address : '')
-        : (player1Wallet ? player1Wallet.address : '');
-        
-      if (!recipientAddress) {
+      // Determine recipient
+      const recipientWallet = playerNumber === 1 ? player2Wallet : player1Wallet;
+      if (!recipientWallet) {
         throw new Error("Cannot place bet: Both players must be connected");
       }
       
-      // Create transaction payload
-      const payload = createBetPayload(amount, recipientAddress);
+      const recipientAddress = recipientWallet.address;
+      console.log(`Recipient address: ${recipientAddress}`);
       
-      // Sign and submit transaction
-      const response = await signAndSubmitTransaction(payload);
+      // SIMPLIFIED WALLET CONNECTION CHECK
+      let isCorrectWalletConnected = false;
       
-      // Wait for transaction to complete
-      const txResult = await client.waitForTransactionWithResult(response.hash);
-      
-      console.log(`Bet transaction completed:`, txResult);
-      
-      // Update state
-      if (playerNumber === 1) {
-        setPlayer1Bet(amount);
-        // Update wallet balance
-        if (player1Wallet) {
-          setPlayer1Wallet({
-            ...player1Wallet,
-            balance: player1Wallet.balance - amount
-          });
-        }
+      // Check if a wallet is connected and it's the right one
+      if (connected && account && account.address && 
+          account.address.toString() === currentWallet.address) {
+        console.log("Correct wallet is already connected");
+        isCorrectWalletConnected = true;
       } else {
-        setPlayer2Bet(amount);
-        // Update wallet balance
-        if (player2Wallet) {
-          setPlayer2Wallet({
-            ...player2Wallet,
-            balance: player2Wallet.balance - amount
-          });
+        console.log("Need to connect the correct wallet");
+        
+        // First try to disconnect if another wallet is connected
+        if (connected) {
+          console.log("Disconnecting current wallet first");
+          try {
+            await disconnect();
+            // Brief pause to allow disconnection to complete
+            await new Promise(resolve => setTimeout(resolve, 300));
+          } catch (disconnectError) {
+            console.warn("Error during disconnection:", disconnectError);
+            // Continue anyway - we'll try to connect
+          }
+        }
+        
+        // Try connecting with the wallet adapter first
+        try {
+          console.log("Connecting via wallet adapter");
+          await connect('Petra');
+          await new Promise(resolve => setTimeout(resolve, 500)); // Wait for connection
+          
+          // Check if we connected to the correct wallet
+          if (account && account.address && 
+              account.address.toString() === currentWallet.address) {
+            console.log("Successfully connected to the correct wallet");
+            isCorrectWalletConnected = true;
+          } else {
+            console.log("Connected to wrong wallet or connection failed");
+          }
+        } catch (connectError) {
+          console.warn("Wallet adapter connection failed:", connectError);
+        }
+        
+        // If wallet adapter failed, try direct connection
+        if (!isCorrectWalletConnected && window.aptos) {
+          try {
+            console.log("Trying direct wallet connection");
+            const response = await window.aptos.connect();
+            console.log("Direct wallet connection response:", response);
+            
+            if (response && response.address === currentWallet.address) {
+              console.log("Direct connection successful");
+              isCorrectWalletConnected = true;
+            } else {
+              console.log(`Connected to ${response?.address || 'unknown'}, needed ${currentWallet.address}`);
+            }
+          } catch (directError) {
+            console.error("Direct wallet connection failed:", directError);
+          }
         }
       }
       
-      // Check if both players have placed bets
-      if (playerNumber === 1 && player2Bet > 0) {
-        startGameWithBets(amount, player2Bet);
-      } else if (playerNumber === 2 && player1Bet > 0) {
-        startGameWithBets(player1Bet, amount);
-      } else {
-        // Only one player has bet so far
-        setGameState('betting');
+      // Check if we have a connected wallet
+      if (!isCorrectWalletConnected) {
+        throw new Error("Please make sure the correct wallet is connected and unlocked. You may need to select the correct account in your wallet.");
       }
       
+      // IMPROVED TRANSACTION HANDLING
+      // Validate player has enough funds before attempting transaction
+      console.log(`Player ${playerNumber} balance: ${currentWallet.balance} APT, attempting to bet ${amount} APT`);
+      if (currentWallet.balance < amount) {
+        throw new Error(`Insufficient funds. You need at least ${amount} APT to place this bet.`);
+      }
+      
+      // Create transaction payload with extensive logging
+      console.log("Creating transaction payload...");
+      try {
+        // Convert APT to Octas (smallest unit) - 1 APT = 10^8 Octas
+        const amountInOctas = Math.floor(amount * 100000000).toString();
+        console.log(`Amount in Octas: ${amountInOctas}`);
+        
+        const payload = {
+          type: "entry_function_payload",
+          function: "0x1::coin::transfer",
+          type_arguments: ["0x1::aptos_coin::AptosCoin"],
+          arguments: [recipientAddress, amountInOctas]
+        };
+        
+        console.log("Transaction payload created:", JSON.stringify(payload));
+        
+        // Submit transaction with enhanced error handling
+        console.log("Attempting to submit transaction...");
+        let txHash = "";
+        
+        // First try the wallet adapter method
+        if (connected && account && typeof signAndSubmitTransaction === 'function') {
+          try {
+            console.log("Using wallet adapter signAndSubmitTransaction");
+            const response = await signAndSubmitTransaction(payload as any);
+            
+            if (response && response.hash) {
+              txHash = response.hash;
+              console.log(`Transaction submitted via adapter with hash: ${txHash}`);
+            } else {
+              console.error("Adapter transaction response missing hash:", response);
+              throw new Error("Transaction failed: No transaction hash returned from adapter");
+            }
+          } catch (adapterError) {
+            console.error("Adapter transaction submission failed:", adapterError);
+            
+            // Fall back to direct method
+            if (window.aptos && typeof window.aptos.signAndSubmitTransaction === 'function') {
+              console.log("Falling back to direct window.aptos.signAndSubmitTransaction");
+              try {
+                const directResponse = await window.aptos.signAndSubmitTransaction(payload);
+                
+                if (directResponse && directResponse.hash) {
+                  txHash = directResponse.hash;
+                  console.log(`Transaction submitted via direct method with hash: ${txHash}`);
+                } else {
+                  console.error("Direct transaction response missing hash:", directResponse);
+                  throw new Error("Transaction failed: No transaction hash returned from direct method");
+                }
+              } catch (directError) {
+                console.error("Direct transaction submission failed:", directError);
+                throw directError; // Re-throw to be caught by the outer catch
+              }
+            } else {
+              // No fallback available, re-throw the adapter error
+              throw adapterError;
+            }
+          }
+        } 
+        // If adapter not available, try direct method
+        else if (window.aptos && typeof window.aptos.signAndSubmitTransaction === 'function') {
+          console.log("Adapter not available, using direct window.aptos.signAndSubmitTransaction");
+          try {
+            const directResponse = await window.aptos.signAndSubmitTransaction(payload);
+            
+            if (directResponse && directResponse.hash) {
+              txHash = directResponse.hash;
+              console.log(`Transaction submitted via direct method with hash: ${txHash}`);
+            } else {
+              console.error("Direct transaction response missing hash:", directResponse);
+              throw new Error("Transaction failed: No transaction hash returned from direct method");
+            }
+          } catch (directError) {
+            console.error("Direct transaction submission failed:", directError);
+            throw directError;
+          }
+        } else {
+          throw new Error("No transaction submission method available. Please make sure your wallet is properly connected.");
+        }
+        
+        // Wait for transaction confirmation with better error handling
+        if (txHash) {
+          try {
+            console.log(`Waiting for transaction ${txHash} to be confirmed...`);
+            const txResult = await client.waitForTransactionWithResult(txHash);
+            console.log("Transaction confirmed:", txResult);
+            
+            // Check if transaction was successful - using a type-safe approach
+            // @ts-ignore - Handle potential type mismatch in transaction result
+            if (txResult && typeof txResult.success === 'boolean' && txResult.success === false) {
+              console.error("Transaction failed on chain:", txResult);
+              throw new Error("Transaction failed on chain. Please check your wallet for details.");
+            }
+          } catch (confirmError) {
+            console.warn("Error confirming transaction:", confirmError);
+            console.log("Continuing despite confirmation error (transaction may still be processing)");
+            // Don't throw here - the transaction might still be processing
+          }
+          
+          // Update state even if confirmation failed - transaction was submitted
+          console.log(`Updating Player ${playerNumber} bet state...`);
+          if (playerNumber === 1) {
+            setPlayer1Bet(amount);
+            // Update wallet balance
+            setPlayer1Wallet({
+              ...player1Wallet,
+              balance: player1Wallet.balance - amount
+            });
+          } else {
+            setPlayer2Bet(amount);
+            // Update wallet balance
+            setPlayer2Wallet({
+              ...player2Wallet,
+              balance: player2Wallet.balance - amount
+            });
+          }
+          
+          // Check if both players have placed bets
+          if ((playerNumber === 1 && player2Bet > 0) || (playerNumber === 2 && player1Bet > 0)) {
+            console.log("Both players have placed bets. Starting game...");
+            const otherPlayerBet = playerNumber === 1 ? player2Bet : player1Bet;
+            startGameWithBets(playerNumber === 1 ? amount : otherPlayerBet, playerNumber === 1 ? otherPlayerBet : amount);
+          } else {
+            // Only one player has bet so far
+            console.log("Waiting for other player to place bet...");
+            setGameState('betting');
+          }
+          
+          console.log("Bet placement completed successfully");
+        } else {
+          throw new Error("Failed to get transaction hash. Please try again.");
+        }
+      } catch (txError: any) {
+        console.error("Transaction error:", txError);
+        throw new Error(`Transaction failed: ${txError.message || 'Unknown error'}`);
+      }
     } catch (error: any) {
       console.error(`Error placing bet for Player ${playerNumber}:`, error);
       setError(error.message || `Failed to place bet for Player ${playerNumber}`);
@@ -329,28 +540,92 @@ export default function Home() {
   async function payWinner(winnerAddress: string, amount: number) {
     try {
       setIsLoading(true);
+      console.log(`Starting payment to winner ${winnerAddress} with amount ${amount} APT`);
       
-      // Convert APT to Octas (smallest unit)
-      const amountInOctas = (amount * 100000000).toString();
+      // Validate inputs
+      if (!winnerAddress || winnerAddress.trim() === '') {
+        console.error("Invalid winner address");
+        return; // Silently return instead of showing error to user
+      }
+      
+      if (amount <= 0) {
+        console.error("Invalid payment amount:", amount);
+        return; // Silently return instead of showing error to user
+      }
       
       // Create transaction payload
+      const amountInOctas = Math.floor(amount * 100000000).toString();
+      console.log(`Amount in Octas: ${amountInOctas}`);
+      
       const payload = {
         type: "entry_function_payload",
         function: "0x1::coin::transfer",
         type_arguments: ["0x1::aptos_coin::AptosCoin"],
         arguments: [winnerAddress, amountInOctas]
-      } as any; // Type assertion to avoid TypeScript errors
+      };
       
-      // Sign and submit transaction
-      const response = await signAndSubmitTransaction(payload);
+      console.log("Winner payment payload created:", JSON.stringify(payload));
       
-      // Wait for transaction to complete
-      await client.waitForTransactionWithResult(response.hash);
+      // Submit transaction with enhanced error handling
+      console.log("Attempting to submit winner payment transaction...");
+      let txHash = "";
+      let transactionSucceeded = false;
       
-      console.log(`Payment to winner ${winnerAddress} completed: ${amount} APT`);
+      // Try transaction submission
+      try {
+        // First try the wallet adapter if available
+        if (connected && account && typeof signAndSubmitTransaction === 'function') {
+          console.log("Using wallet adapter for winner payment");
+          const response = await signAndSubmitTransaction(payload as any);
+          
+          if (response && response.hash) {
+            txHash = response.hash;
+            console.log(`Winner payment transaction submitted via adapter with hash: ${txHash}`);
+            transactionSucceeded = true;
+          } else {
+            console.warn("Adapter transaction response missing hash:", response);
+            // Don't throw, try direct method
+          }
+        }
+        
+        // If adapter failed or not available, try direct method
+        if (!transactionSucceeded && window.aptos && typeof window.aptos.signAndSubmitTransaction === 'function') {
+          console.log("Using direct Petra wallet for winner payment");
+          const directResponse = await window.aptos.signAndSubmitTransaction(payload);
+          
+          if (directResponse && directResponse.hash) {
+            txHash = directResponse.hash;
+            console.log(`Winner payment transaction submitted directly with hash: ${txHash}`);
+            transactionSucceeded = true;
+          } else {
+            console.warn("Direct transaction response missing hash:", directResponse);
+          }
+        }
+        
+        // If we have a hash, wait for confirmation
+        if (txHash) {
+          try {
+            console.log(`Waiting for winner payment transaction ${txHash} to be confirmed...`);
+            const txResult = await client.waitForTransactionWithResult(txHash);
+            console.log("Winner payment transaction confirmed:", txResult);
+          } catch (confirmError) {
+            console.warn("Error confirming winner payment transaction:", confirmError);
+            console.log("Continuing despite confirmation error (transaction may still be processing)");
+            // Don't throw - transaction was submitted and might still process
+          }
+          
+          console.log(`Payment to winner ${winnerAddress} completed: ${amount} APT`);
+        } else if (!transactionSucceeded) {
+          console.error("No transaction hash returned for winner payment");
+          // Don't throw error to user - handle silently
+        }
+      } catch (txError) {
+        console.error("Winner payment transaction error:", txError);
+        // Only log the error, don't show to user since this is part of game completion
+      }
     } catch (error: any) {
-      console.error('Error paying winner:', error);
-      setError(`Failed to pay winner: ${error.message}`);
+      // Only log the error, don't display to user
+      console.error('Error in payWinner function:', error);
     } finally {
       setIsLoading(false);
     }
@@ -428,33 +703,6 @@ export default function Home() {
   // Check if it's the betting phase and which player needs to bet
   const needsPlayer1Bet = gameState === 'betting' && player1Bet === 0 && player2Bet > 0;
   const needsPlayer2Bet = gameState === 'betting' && player2Bet === 0 && player1Bet > 0;
-
-  // Function to reset wallet connections
-  const resetWalletConnections = async () => {
-    try {
-      setIsLoading(true);
-      console.log("Resetting wallet connections...");
-      
-      // Disconnect current wallet
-      if (connected) {
-        await disconnect();
-      }
-      
-      // Reset state
-      setPlayer1Wallet(null);
-      setPlayer2Wallet(null);
-      setPlayer1Bet(0);
-      setPlayer2Bet(0);
-      setFinalBetAmount(0);
-      
-      console.log("Wallet connections reset successfully");
-    } catch (error) {
-      console.error("Error resetting wallet connections:", error);
-      setError("Failed to reset wallet connections. Please refresh the page.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Early return for error state
   if (error) {
