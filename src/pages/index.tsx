@@ -179,6 +179,27 @@ export default function Home({ provider }: any) {
   const needsPlayer1Bet = gameState === 'betting' && player1Bet === 0 && player2Bet > 0;
   const needsPlayer2Bet = gameState === 'betting' && player2Bet === 0 && player1Bet > 0;
 
+  // Add a new function to handle game forfeits
+  function forfeitGame(playerNumber: 1 | 2) {
+    if (gameState !== 'playing') {
+      console.log("Can only forfeit during an active game");
+      return;
+    }
+    
+    setGameState('completed');
+    
+    // Determine the winner (opposite of the player who forfeited)
+    const winner = playerNumber === 1 ? 'black' : 'white';
+    console.log(`Player ${playerNumber} forfeited. ${winner === 'white' ? 'Player 1' : 'Player 2'} wins!`);
+    
+    // AI agent facilitates the payout to the winner
+    if (aiEnabled && finalBetAmount > 0) {
+      // In a real implementation, this would trigger a smart contract call
+      // to distribute the pooled bet amount to the winner
+      console.log(`Distributing ${finalBetAmount.toFixed(4)} ETH to ${winner === 'white' ? 'Player 1' : 'Player 2'}`);
+    }
+  }
+
   // Early return for error state
   if (error) {
     return (
@@ -231,6 +252,39 @@ export default function Home({ provider }: any) {
               player1Wallet={player1Wallet}
               player2Wallet={player2Wallet}
             />
+            
+            {/* Quit Game Options - Only show during active game */}
+            {gameState === 'playing' && (
+              <div className="mt-6 grid grid-cols-2 gap-4">
+                <div className="p-4 border border-gray-200 rounded-lg">
+                  <h3 className="text-lg font-bold mb-2">Player 1 (White)</h3>
+                  <button 
+                    onClick={() => forfeitGame(1)}
+                    className="w-full py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  >
+                    Forfeit Game
+                  </button>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Forfeiting will award the win to Player 2
+                    {finalBetAmount > 0 && ` and transfer the bet of ${finalBetAmount.toFixed(4)} ETH`}
+                  </p>
+                </div>
+                
+                <div className="p-4 border border-gray-200 rounded-lg">
+                  <h3 className="text-lg font-bold mb-2">Player 2 (Black)</h3>
+                  <button 
+                    onClick={() => forfeitGame(2)}
+                    className="w-full py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  >
+                    Forfeit Game
+                  </button>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Forfeiting will award the win to Player 1
+                    {finalBetAmount > 0 && ` and transfer the bet of ${finalBetAmount.toFixed(4)} ETH`}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="lg:col-span-1">
