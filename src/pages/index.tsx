@@ -355,14 +355,14 @@ export default function Home() {
           const balance = await getAccountBalance(response.address);
           
           // Set the wallet in state
-          const walletInfo: PlayerWalletInfo = {
+      const walletInfo: PlayerWalletInfo = {
             address: response.address,
-            balance: balance
-          };
-          
-          if (playerNumber === 1) {
-            setPlayer1Wallet(walletInfo);
-          } else {
+        balance: balance
+      };
+      
+      if (playerNumber === 1) {
+        setPlayer1Wallet(walletInfo);
+      } else {
             setPlayer2Wallet(walletInfo);
           }
           
@@ -393,9 +393,9 @@ export default function Home() {
       
       if (typeof window === 'undefined' || !window.aptos) {
         setError("Petra wallet is not installed. Please install the Petra wallet extension.");
-        setIsLoading(false);
-        return;
-      }
+          setIsLoading(false);
+          return;
+        }
       
       // Prompt to select the escrow wallet
       window.alert("Please make sure your ESCROW wallet is selected in your Petra extension.");
@@ -449,9 +449,9 @@ export default function Home() {
           if (player1Wallet) {
             console.log(`Returning ${player1Bet} APT to Player 1 from escrow`);
             const payload1 = {
-              type: "entry_function_payload",
-              function: "0x1::coin::transfer",
-              type_arguments: ["0x1::aptos_coin::AptosCoin"],
+      type: "entry_function_payload",
+      function: "0x1::coin::transfer",
+      type_arguments: ["0x1::aptos_coin::AptosCoin"],
               arguments: [player1Wallet.address, Math.floor(player1Bet * 100000000).toString()]
             };
             
@@ -525,16 +525,16 @@ export default function Home() {
         if (winner === 'draw') {
           console.log("Draw game - both players receive their bets back (simulation)");
           
-          if (player1Wallet) {
-            setPlayer1Wallet({
-              ...player1Wallet,
+        if (player1Wallet) {
+          setPlayer1Wallet({
+            ...player1Wallet,
               balance: player1Wallet.balance + player1Bet
-            });
-          }
+          });
+        }
           
-          if (player2Wallet) {
-            setPlayer2Wallet({
-              ...player2Wallet,
+        if (player2Wallet) {
+          setPlayer2Wallet({
+            ...player2Wallet,
               balance: player2Wallet.balance + player2Bet
             });
           }
@@ -598,7 +598,7 @@ export default function Home() {
   const getWalletConnectionInstructions = (playerNumber: 1 | 2) => {
     if (playerNumber === 1) {
       return "Connect your first wallet by clicking the button below.";
-    } else {
+      } else {
       return "To connect Player 2's wallet:\n1. Open your Petra wallet extension\n2. Switch to a DIFFERENT wallet account (important!)\n3. Click 'Connect Player 2 Wallet'\n\nUsing the same wallet for both players is not recommended for real games.";
     }
   };
@@ -697,7 +697,7 @@ export default function Home() {
       setFinalBetAmount(minimumBet * 2);
       
       // Update game state
-      setGameState('betting');
+        setGameState('betting');
       
       console.log('Unified bet announcement successful');
       
@@ -866,7 +866,7 @@ export default function Home() {
       
       setFinalBetAmount(minBetAmount * 2);
       setEscrowLocked(true);
-      setGameState('playing');
+    setGameState('playing');
       console.log("Game state set to 'playing'");
     }
   }
@@ -1181,8 +1181,8 @@ export default function Home() {
     }, 3000);
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8">
+    return (
+      <div className="container mx-auto px-4 py-8">
       <Head>
         <title>Chess Game with Aptos</title>
         <meta name="description" content="Play chess with Aptos blockchain integration" />
@@ -1195,12 +1195,12 @@ export default function Home() {
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
           <strong>Error: </strong> {error}
-          <button 
-            onClick={() => setError(null)}
+            <button 
+              onClick={() => setError(null)}
             className="ml-4 px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
-          >
-            Dismiss
-          </button>
+            >
+              Dismiss
+            </button>
         </div>
       )}
 
@@ -1227,12 +1227,12 @@ export default function Home() {
                   <span className="font-semibold">Balance:</span> {player1Wallet.balance} APT
                 </p>
                 <div className="flex space-x-2 mb-4">
-                  <button
+            <button 
                     className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
                     onClick={() => disconnectWallet(1)}
-                  >
+            >
                     Disconnect
-                  </button>
+            </button>
                   {useSimulationMode && (
                     <button
                       className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded"
@@ -1241,8 +1241,8 @@ export default function Home() {
                       Edit Address
                     </button>
                   )}
-                </div>
-              </div>
+          </div>
+        </div>
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-gray-600 mb-2">{getWalletConnectionInstructions(1)}</p>
@@ -1252,15 +1252,15 @@ export default function Home() {
                 >
                   Connect Player 1 Wallet
                 </button>
-                {useSimulationMode && (
+                {/* {useSimulationMode && (
                   <button
                     className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded block w-full"
                     onClick={() => setManualWalletAddress(1)}
                   >
                     Set Manual Address
                   </button>
-                )}
-              </div>
+                )} */}
+      </div>
             )}
 
             {gameState === 'betting' && player1Bet > 0 && !player1EscrowLocked && player2Bet > 0 && (
@@ -1290,13 +1290,13 @@ export default function Home() {
                 <p className="text-green-700">Escrow locked successfully!</p>
               </div>
             )}
-          </div>
-
+            </div>
+            
           {/* Middle panel - Game */}
           <div className="bg-white p-4 rounded shadow">
             <div className="mb-4">
-              <GameDashboard
-                gameState={gameState}
+            <GameDashboard 
+              gameState={gameState}
                 player1Wallet={player1Wallet}
                 player2Wallet={player2Wallet}
                 player1Bet={player1Bet}
@@ -1346,17 +1346,17 @@ export default function Home() {
                   </div>
                 </div>
                 
-                <button
+                  <button 
                   onClick={announceUnifiedBet}
                   disabled={!player1Wallet || !player2Wallet || player1Bet <= 0 || player2Bet <= 0}
                   className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-bold text-lg"
-                >
+                  >
                   Announce Bets & Calculate Minimum
-                </button>
+                  </button>
                 <p className="text-xs text-center text-gray-600 mt-2">
                   This will calculate the minimum bet amount from both players
-                </p>
-              </div>
+                  </p>
+                </div>
             )}
 
             <div className="mb-4 aspect-square max-w-md mx-auto">
@@ -1375,12 +1375,12 @@ export default function Home() {
                 <p className="mb-4 text-gray-600">
                   Total Pool: {finalBetAmount} APT
                 </p>
-                <button
+                  <button 
                   className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded mr-2"
                   onClick={() => forfeitGame(currentPlayer === 'white' ? 1 : 2)}
-                >
+                  >
                   Forfeit
-                </button>
+                  </button>
               </div>
             )}
 
@@ -1403,13 +1403,13 @@ export default function Home() {
               </div>
             )}
           </div>
-
+          
           {/* Right panel - Player 2 */}
           <div className="bg-gray-100 p-4 rounded shadow">
             <h2 className="text-xl font-bold mb-4">Player 2 (Black)</h2>
             
             {player2Wallet ? (
-              <div>
+                <div>
                 <p className="mb-2">
                   <span className="font-semibold">Address:</span>{' '}
                   <span title={player2Wallet.address} className="cursor-help">{player2Wallet.address.substring(0, 6)}...{player2Wallet.address.substring(player2Wallet.address.length - 4)}</span>
@@ -1418,7 +1418,7 @@ export default function Home() {
                   <span className="font-semibold">Balance:</span> {player2Wallet.balance} APT
                 </p>
                 <div className="flex space-x-2 mb-4">
-                  <button
+                  <button 
                     className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
                     onClick={() => disconnectWallet(2)}
                   >
@@ -1433,27 +1433,27 @@ export default function Home() {
                     </button>
                   )}
                 </div>
-              </div>
-            ) : (
+                </div>
+              ) : (
               <div className="space-y-3">
                 <div className="bg-yellow-50 border border-yellow-200 p-3 rounded text-sm">
                   <p className="text-yellow-800 whitespace-pre-line font-medium">{getWalletConnectionInstructions(2)}</p>
-                </div>
+                  </div>
                 <button
                   className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded block w-full font-bold"
                   onClick={connectPlayer2Wallet}
                 >
                   Connect Player 2 Wallet
                 </button>
-                {useSimulationMode && (
+                {/* {useSimulationMode && (
                   <button
                     className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded block w-full"
                     onClick={() => setManualWalletAddress(2)}
                   >
                     Set Manual Address
                   </button>
-                )}
-              </div>
+              )} */}
+            </div>
             )}
 
             {gameState === 'betting' && player2Bet > 0 && !player2EscrowLocked && player1Bet > 0 && (
@@ -1465,27 +1465,27 @@ export default function Home() {
                   <span className="font-semibold">Minimum Bet:</span> {Math.min(player1Bet, player2Bet)} APT
                   <span className="text-xs ml-1">(this amount will be deducted)</span>
                 </p>
-                <button
+                  <button 
                   className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
                   onClick={() => lockEscrow(2)}
                   disabled={!player2Wallet || player2EscrowLocked}
                 >
                   Lock Your Escrow
-                </button>
+                  </button>
                 <p className="text-sm text-gray-600 mt-2">
                   {player2EscrowLocked ? 'Your escrow is locked!' : 'Lock your escrow to proceed with the game'}
                 </p>
-              </div>
+                </div>
             )}
 
             {player2EscrowLocked && (
               <div className="mt-2 bg-green-100 p-2 rounded">
                 <p className="text-green-700">Escrow locked successfully!</p>
-              </div>
+                  </div>
             )}
-          </div>
-        </div>
-      )}
+                  </div>
+                </div>
+              )}
 
       {/* Simulation mode toggle and contract status */}
       <div className="mt-8 p-4 bg-gray-200 rounded">
@@ -1509,7 +1509,7 @@ export default function Home() {
                   >
                     Disconnect Escrow
                   </button>
-                </div>
+                  </div>
               ) : (
                 <div className="mt-2">
                   <p className="text-indigo-700 mb-2">Connect your escrow wallet:</p>
@@ -1522,10 +1522,10 @@ export default function Home() {
                   </button>
                   <p className="text-xs text-indigo-600 mt-1">
                     The escrow wallet will hold funds during the game and distribute to the winner.
-                  </p>
-                </div>
-              )}
-            </div>
+                    </p>
+                  </div>
+                )}
+              </div>
             
             {/* Wallet Connection Tips */}
             <div className="mt-4 p-2 bg-blue-50 border border-blue-200 rounded">
@@ -1537,10 +1537,10 @@ export default function Home() {
                 <li>Place bets and lock escrow to start the game</li>
                 <li>After game completes, the escrow wallet will pay the winner</li>
               </ol>
-            </div>
-          </div>
+                  </div>
+                  </div>
           <div>
-            <div className="flex items-center">
+            {/* <div className="flex items-center">
               <input
                 type="checkbox"
                 id="simulationMode"
@@ -1549,12 +1549,12 @@ export default function Home() {
                 className="mr-2"
               />
               <label htmlFor="simulationMode">Simulation Mode (No real transactions)</label>
-            </div>
-            <p className="text-sm text-gray-600 mt-1">
+                </div> */}
+            {/* <p className="text-sm text-gray-600 mt-1">
               Enable simulation mode to test the game flow without actual blockchain transactions.
-            </p>
-            <div className="mt-2">
-              <button
+            </p> */}
+            {/* <div className="mt-2">
+                <button 
                 className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded mr-2"
                 onClick={initializeEscrow}
                 disabled={useSimulationMode || !escrowAddress || !player1Wallet || !player2Wallet}
@@ -1579,8 +1579,8 @@ export default function Home() {
                 onClick={resetWalletConnections}
               >
                 Reset All Wallets
-              </button>
-            </div>
+                </button> */}
+              {/* </div> */}
           </div>
         </div>
       </div>
