@@ -47,7 +47,8 @@ export function GameDashboard({
         return 'Waiting for players to announce their bets';
       case 'betting':
         if (player1Bet > 0 && player2Bet > 0) {
-          return `Both players have announced bets - Player 1: ${player1Bet} APT, Player 2: ${player2Bet} APT. Lock your escrow to continue.`;
+          const minimumBet = Math.min(player1Bet, player2Bet);
+          return `Both players have announced bets - Minimum bet: ${minimumBet} APT. This is the amount that will be locked in escrow.`;
         } else if (player1Bet > 0) {
           return `Player 1 bet: ${player1Bet} APT. Waiting for Player 2 to announce bet.`;
         } else if (player2Bet > 0) {
@@ -79,19 +80,33 @@ export function GameDashboard({
       return null;
     }
 
+    const minimumBet = player1Bet > 0 && player2Bet > 0 ? Math.min(player1Bet, player2Bet) : 0;
+
     return (
       <div className="mb-4 p-3 border rounded bg-gray-50">
         <h3 className="text-lg font-semibold mb-2">Escrow Status</h3>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <p><span className="font-medium">Player 1:</span> {player1EscrowLocked ? '✅ Locked' : '🔓 Unlocked'}</p>
-            <p><span className="font-medium">Bet:</span> {player1Bet} APT</p>
+            <p><span className="font-medium">Announced Bet:</span> {player1Bet} APT</p>
           </div>
           <div>
             <p><span className="font-medium">Player 2:</span> {player2EscrowLocked ? '✅ Locked' : '🔓 Unlocked'}</p>
-            <p><span className="font-medium">Bet:</span> {player2Bet} APT</p>
+            <p><span className="font-medium">Announced Bet:</span> {player2Bet} APT</p>
           </div>
         </div>
+        
+        {minimumBet > 0 && (
+          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+            <p className="text-blue-800 font-medium">
+              Minimum bet: {minimumBet} APT
+              <span className="block text-sm font-normal mt-1">
+                Each player will lock {minimumBet} APT in escrow, for a total pot of {minimumBet * 2} APT
+              </span>
+            </p>
+          </div>
+        )}
+        
         {(player1EscrowLocked || player2EscrowLocked) && (
           <div className="mt-2">
             <p className="text-sm">

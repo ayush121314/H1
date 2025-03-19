@@ -662,44 +662,52 @@ export default function Home() {
     );
   }
 
-  // Announce player bet - this just records the bet amount without transferring funds
-  async function announcePlayerBet(playerNumber: 1 | 2, amount: number) {
+  // Add function to announce bets for both players and calculate minimum
+  const announceUnifiedBet = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      console.log(`Player ${playerNumber} announces a bet of ${amount} APT`);
+      console.log(`Announcing unified bet - Player 1: ${player1Bet} APT, Player 2: ${player2Bet} APT`);
       
-      // Check if player wallet is connected
-      const currentWallet = playerNumber === 1 ? player1Wallet : player2Wallet;
-      if (!currentWallet) {
-        throw new Error(`Player ${playerNumber} wallet not connected`);
+      // Validate both players have wallets connected
+      if (!player1Wallet || !player2Wallet) {
+        throw new Error('Both players must connect their wallets before announcing bets');
       }
       
-      // Make sure player has enough funds
-      if (currentWallet.balance < amount) {
-        throw new Error(`Insufficient funds. You need at least ${amount} APT to place this bet.`);
+      // Validate bet amounts
+      if (player1Bet <= 0 || player2Bet <= 0) {
+        throw new Error('Both players must enter valid bet amounts (greater than 0)');
       }
       
-      // Set the bet amount in state
-      if (playerNumber === 1) {
-        setPlayer1Bet(amount);
-      } else {
-        setPlayer2Bet(amount);
+      // Check sufficient funds
+      if (player1Wallet.balance < player1Bet) {
+        throw new Error(`Player 1 has insufficient funds. Available: ${player1Wallet.balance} APT, Bet: ${player1Bet} APT`);
       }
       
-      // Update game state to betting
+      if (player2Wallet.balance < player2Bet) {
+        throw new Error(`Player 2 has insufficient funds. Available: ${player2Wallet.balance} APT, Bet: ${player2Bet} APT`);
+      }
+      
+      // Calculate minimum bet
+      const minimumBet = Math.min(player1Bet, player2Bet);
+      console.log(`Calculated minimum bet: ${minimumBet} APT`);
+      
+      // Set final bet amount (pot)
+      setFinalBetAmount(minimumBet * 2);
+      
+      // Update game state
       setGameState('betting');
       
-      console.log("Bet recorded successfully");
+      console.log('Unified bet announcement successful');
       
     } catch (error: any) {
-      console.error(`Error announcing bet for Player ${playerNumber}:`, error);
-      setError(error.message || `Failed to announce bet for Player ${playerNumber}`);
+      console.error('Error announcing unified bet:', error);
+      setError(error.message || 'Failed to announce unified bet');
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
   // Lock the escrow by transferring the minimum bet amount from a specific player
   async function lockEscrow(playerNumber: 1 | 2) {
@@ -715,9 +723,9 @@ export default function Home() {
         throw new Error("Both players must announce bets before locking escrow");
       }
       
-      // Determine the bet amount for this player
-      const betAmount = playerNumber === 1 ? player1Bet : player2Bet;
-      console.log(`Player ${playerNumber} bet amount: ${betAmount} APT`);
+      // Determine the minimum bet amount (this is what will be deducted)
+      const minimumBet = Math.min(player1Bet, player2Bet);
+      console.log(`Minimum bet amount between players: ${minimumBet} APT`);
       
       // Get player wallet
       const playerWallet = playerNumber === 1 ? player1Wallet : player2Wallet;
@@ -742,34 +750,34 @@ export default function Home() {
         throw new Error("No escrow wallet connected. Please connect the escrow wallet first.");
       }
       
-      console.log(`Depositing ${betAmount} APT to escrow contract from Player ${playerNumber}`);
+      console.log(`Depositing ${minimumBet} APT to escrow contract from Player ${playerNumber}`);
       
       // Use simulation mode if enabled
       if (useSimulationMode) {
         console.log("Using simulation mode - no actual transfer will occur");
         
         // Simulate deposit
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Update UI state
         if (playerNumber === 1) {
           setPlayer1EscrowLocked(true);
           setPlayer1Wallet({
             ...playerWallet,
-            balance: playerWallet.balance - betAmount
+            balance: playerWallet.balance - minimumBet
           });
         } else {
           setPlayer2EscrowLocked(true);
           setPlayer2Wallet({
             ...playerWallet,
-            balance: playerWallet.balance - betAmount
+            balance: playerWallet.balance - minimumBet
           });
         }
         
         console.log(`Simulated escrow lock successful for Player ${playerNumber}`);
         
         // Update escrow balance in simulation mode
-        setEscrowBalance(prevBalance => prevBalance + betAmount);
+        setEscrowBalance(prevBalance => prevBalance + minimumBet);
       } else {
         // Real deposit by transferring funds to the escrow address
         // Make sure the player's wallet is connected
@@ -778,8 +786,8 @@ export default function Home() {
           throw new Error(`Please connect the wallet for Player ${playerNumber} to continue`);
         }
         
-        // Direct transfer to escrow address
-        const transferSuccess = await transferToEscrow(playerNumber, betAmount, escrowAddress);
+        // Direct transfer to escrow address - using minimumBet instead of player's full bet
+        const transferSuccess = await transferToEscrow(playerNumber, minimumBet, escrowAddress);
         
         if (!transferSuccess) {
           throw new Error(`Failed to transfer funds to escrow for Player ${playerNumber}`);
@@ -817,11 +825,10 @@ export default function Home() {
       if (playerNumber === 1 ? player2EscrowLocked : player1EscrowLocked) {
         console.log("Both players have deposited funds to escrow. Starting game...");
         
-        // Get the minimum bet (which determines the pool)
-        const minBet = Math.min(player1Bet, player2Bet);
-        const finalPoolAmount = minBet * 2;
+        // Final pool amount is minimum bet × 2
+        const finalPoolAmount = minimumBet * 2;
         
-        console.log(`Setting final bet amount to ${finalPoolAmount} APT (min of ${player1Bet} and ${player2Bet} × 2)`);
+        console.log(`Setting final bet amount to ${finalPoolAmount} APT (${minimumBet} × 2)`);
         setFinalBetAmount(finalPoolAmount);
         setEscrowLocked(true);
         
@@ -1256,33 +1263,14 @@ export default function Home() {
               </div>
             )}
 
-            {gameState === 'waiting' && player1Wallet && (
-              <div className="mt-4">
-                <label className="block mb-2">
-                  <span className="font-semibold">Bet Amount (APT):</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={player1Bet}
-                    onChange={(e) => setPlayer1Bet(parseFloat(e.target.value))}
-                    className="ml-2 p-1 border rounded"
-                  />
-                </label>
-                <button
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
-                  onClick={() => announcePlayerBet(1, player1Bet)}
-                  disabled={!player1Wallet || player1Bet <= 0}
-                >
-                  Announce Bet
-                </button>
-              </div>
-            )}
-
-            {gameState === 'betting' && player1Bet > 0 && !player1EscrowLocked && (
+            {gameState === 'betting' && player1Bet > 0 && !player1EscrowLocked && player2Bet > 0 && (
               <div className="mt-4">
                 <p className="mb-2">
                   <span className="font-semibold">Your Bet:</span> {player1Bet} APT
+                </p>
+                <p className="mb-2 text-blue-700">
+                  <span className="font-semibold">Minimum Bet:</span> {Math.min(player1Bet, player2Bet)} APT
+                  <span className="text-xs ml-1">(this amount will be deducted)</span>
                 </p>
                 <button
                   className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
@@ -1320,6 +1308,56 @@ export default function Home() {
                 winner={winner}
               />
             </div>
+
+            {/* Unified Betting Interface - Show when both wallets are connected and in waiting state */}
+            {gameState === 'waiting' && player1Wallet && player2Wallet && (
+              <div className="mb-6 p-4 border border-yellow-200 bg-yellow-50 rounded">
+                <h3 className="text-lg font-bold text-center mb-3">Announce Bets</h3>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="font-medium text-center mb-1">Player 1 Bet</p>
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={player1Bet}
+                        onChange={(e) => setPlayer1Bet(parseFloat(e.target.value) || 0)}
+                        className="p-2 border rounded w-full text-center"
+                        placeholder="Enter amount"
+                      />
+                      <span className="ml-2">APT</span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-medium text-center mb-1">Player 2 Bet</p>
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={player2Bet}
+                        onChange={(e) => setPlayer2Bet(parseFloat(e.target.value) || 0)}
+                        className="p-2 border rounded w-full text-center"
+                        placeholder="Enter amount"
+                      />
+                      <span className="ml-2">APT</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={announceUnifiedBet}
+                  disabled={!player1Wallet || !player2Wallet || player1Bet <= 0 || player2Bet <= 0}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-bold text-lg"
+                >
+                  Announce Bets & Calculate Minimum
+                </button>
+                <p className="text-xs text-center text-gray-600 mt-2">
+                  This will calculate the minimum bet amount from both players
+                </p>
+              </div>
+            )}
 
             <div className="mb-4 aspect-square max-w-md mx-auto">
               <Chessboard
@@ -1418,33 +1456,14 @@ export default function Home() {
               </div>
             )}
 
-            {gameState === 'waiting' && player2Wallet && (
-              <div className="mt-4">
-                <label className="block mb-2">
-                  <span className="font-semibold">Bet Amount (APT):</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={player2Bet}
-                    onChange={(e) => setPlayer2Bet(parseFloat(e.target.value))}
-                    className="ml-2 p-1 border rounded"
-                  />
-                </label>
-                <button
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
-                  onClick={() => announcePlayerBet(2, player2Bet)}
-                  disabled={!player2Wallet || player2Bet <= 0}
-                >
-                  Announce Bet
-                </button>
-              </div>
-            )}
-
-            {gameState === 'betting' && player2Bet > 0 && !player2EscrowLocked && (
+            {gameState === 'betting' && player2Bet > 0 && !player2EscrowLocked && player1Bet > 0 && (
               <div className="mt-4">
                 <p className="mb-2">
                   <span className="font-semibold">Your Bet:</span> {player2Bet} APT
+                </p>
+                <p className="mb-2 text-blue-700">
+                  <span className="font-semibold">Minimum Bet:</span> {Math.min(player1Bet, player2Bet)} APT
+                  <span className="text-xs ml-1">(this amount will be deducted)</span>
                 </p>
                 <button
                   className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
