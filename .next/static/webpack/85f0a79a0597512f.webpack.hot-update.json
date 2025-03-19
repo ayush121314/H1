@@ -1,0 +1,1 @@
+{"c":["pages/index","webpack"],"r":[],"m":["./node_modules/chess.js/dist/esm/chess.js","./src/components/EscrowPanel.tsx","./src/components/LoadingComponent.tsx","./src/contracts/EscrowContractAdapter.ts","./src/hooks/useBetting.ts","./src/hooks/useChessGame.ts","./src/hooks/useEscrow.ts","./src/hooks/useWalletConnection.ts"]}
