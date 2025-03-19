@@ -114,8 +114,8 @@ export function formatWalletAddress(address: string): string {
 // Helper function to get instructions based on player number
 export function getWalletConnectionInstructions(playerNumber: 1 | 2): string {
   if (playerNumber === 1) {
-    return "Connect your first wallet by clicking the button below.";
+    return "Connect your Player 1 wallet by clicking the button below.";
   } else {
-    return "To connect Player 2's wallet:\n1. Open your Petra wallet extension\n2. Switch to a DIFFERENT wallet account (important!)\n3. Click 'Connect Player 2 Wallet'\n\nUsing the same wallet for both players is not recommended for real games.";
+    return "Connect your Player 2 wallet by clicking the button below.";
   }
 } 
