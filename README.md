@@ -1,37 +1,37 @@
-# Chess GameFi with AI Agent
+# Single File React TypeScript App
 
-A blockchain-powered chess application with P2P betting facilitated by AI agents for a more dynamic gaming economy.
+This is a simplified React application that consists of a single index.tsx file along with supporting HTML and CSS files.
 
-## Features
+## Project Structure
 
-- **P2P Chess Gameplay**: Play chess against other players online
-- **Blockchain-based Betting**: Bet on your games with cryptocurrency
-- **AI Agent Integration**: AI agents facilitate betting, act as market makers, and create dynamic game economies
-- **Smart Contract Security**: Secure betting and reward distribution handled by smart contracts
+- `index.html` - The main HTML file that loads React and the TypeScript transpiler
+- `index.tsx` - The single React component file containing all the application logic
+- `styles.css` - CSS styles for the application
 
-## Technology Stack
+## How to Run
 
-- Frontend: Next.js, React, TailwindCSS
-- Chess Logic: chess.js, react-chessboard
-- Blockchain Integration: Ethers.js, Web3.js
-- AI Agent: LangChain, OpenAI
+Simply open the `index.html` file in a modern web browser to see the application.
 
-## Getting Started
+Alternatively, you can use a simple HTTP server:
 
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Run the development server: `npm run dev`
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+```bash
+# If you have Python installed
+python -m http.server
 
-## How It Works
+# If you have Node.js installed
+npx serve
+```
 
-1. Players connect their crypto wallets
-2. Players match with opponents and set their bet amounts
-3. The AI agent handles the betting pool (the lower amount becomes the bet)
-4. The chess game proceeds with standard rules
-5. The winner automatically receives the total bet amount
-6. AI agents analyze game data to optimize market efficiency
+Then open your browser and navigate to `http://localhost:8000` (for Python) or `http://localhost:3000` (for Node.js serve).
 
-## Hackathon Project
+## Development
 
-This project was developed for a hackathon, showcasing how AI agents can facilitate cross-game economies in GameFi applications. 
+This simple setup uses browser-based TypeScript transpiling for demonstration purposes only. For a production application, you would want to:
+
+1. Use a build tool like Webpack, Vite, or Parcel
+2. Set up proper TypeScript compilation
+3. Implement hot module reloading for development
+
+## Notes
+
+This simplified approach is meant for educational purposes or very small projects. For larger applications, consider using a framework like Next.js, Create React App, or Vite. 

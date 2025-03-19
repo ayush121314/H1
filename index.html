@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Single File React App</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root"></div>
+  
+  <!-- Add React and ReactDOM scripts -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  
+  <!-- Load TypeScript transpiler -->
+  <script src="https://unpkg.com/typescript@4.9.5/lib/typescript.js"></script>
+  
+  <!-- TypeScript config -->
+  <script type="application/json" id="tsconfig">
+    {
+      "compilerOptions": {
+        "target": "es2017",
+        "jsx": "react",
+        "moduleResolution": "node",
+        "esModuleInterop": true
+      }
+    }
+  </script>
+  
+  <!-- Load our TypeScript file -->
+  <script type="text/typescript" src="index.tsx"></script>
+  
+  <!-- Runtime TypeScript transpiler -->
+  <script>
+    // Simple TypeScript transpiler for the browser
+    window.onload = function() {
+      const tsConfig = JSON.parse(document.getElementById('tsconfig').textContent);
+      
+      fetch('index.tsx')
+        .then(response => response.text())
+        .then(source => {
+          const transpiled = ts.transpileModule(source, { compilerOptions: tsConfig.compilerOptions });
+          const script = document.createElement('script');
+          script.textContent = transpiled.outputText;
+          document.body.appendChild(script);
+        })
+        .catch(error => console.error('Error loading TypeScript file:', error));
+    };
+  </script>
+</body>
+</html> 
