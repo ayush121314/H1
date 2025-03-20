@@ -2,6 +2,18 @@
 export type Winner = 'player1' | 'player2' | 'draw' | null;
 export type GameState = 'waiting' | 'betting' | 'bet_announced' | 'escrow_locked' | 'playing' | 'completed';
 
+// Game mode types
+export type GameMode = 'twoPlayer' | 'aiVsPerson';
+
+// AI difficulty levels
+export type AIDifficulty = 'easy' | 'medium' | 'hard';
+
+// AI player related types
+export type PlayerType = 'human' | 'ai';
+
+// Player color types
+export type PlayerColor = 'white' | 'black';
+
 // Define player wallet info type
 export interface PlayerWalletInfo {
   address: string;

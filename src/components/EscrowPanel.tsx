@@ -30,19 +30,19 @@ const EscrowPanel: React.FC<EscrowPanelProps> = ({
   onResetWallets
 }) => {
   return (
-    <div className="mt-8 p-4 bg-gray-200 rounded">
-      <h3 className="text-lg font-bold mb-2">Contract Status</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="mt-8 p-4 bg-gray-200  rounded">
+      {/* <h3 className="text-lg font-bold mb-2">Contract Status</h3> */}
+      <div className="grid grid-cols-1  md:grid-cols-2 gap-4">
         <div>
-          <p><strong>Escrow Address:</strong> {escrowAddress || 'Not connected'}</p>
+          {/* <p><strong>Escrow Address:</strong> {escrowAddress || 'Not connected'}</p>
           <p><strong>Status:</strong> {EscrowStatus[escrowStatus]}</p>
           <p><strong>Escrow Balance:</strong> {escrowBalance} APT</p>
-          
+           */}
           {/* Escrow wallet connection panel */}
-          <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded">
+          <div className="mt-4 p-4 bg-indigo-50 border  border-indigo-200 rounded">
             <h4 className="font-bold text-indigo-800">Escrow Wallet</h4>
             {escrowAddress ? (
-              <div className="mt-2">
+              <div className="mt-2 ">
                 <p className="text-indigo-700">Escrow wallet connected:</p>
                 <p className="font-mono text-sm mt-1">{escrowAddress}</p>
                 <button
@@ -82,7 +82,7 @@ const EscrowPanel: React.FC<EscrowPanelProps> = ({
           </div>
         </div>
         <div>
-          <div className="flex items-center">
+          {/* <div className="flex items-center">
             <input
               type="checkbox"
               id="simulationMode"
@@ -122,7 +122,7 @@ const EscrowPanel: React.FC<EscrowPanelProps> = ({
             >
               Reset All Wallets
             </button>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

@@ -10,7 +10,7 @@ export function useEscrow() {
   ), []);
 
   // Escrow state
-  const [useSimulationMode, setUseSimulationMode] = useState<boolean>(true); // Default to true since we're not really deploying
+  const [useSimulationMode, setUseSimulationMode] = useState<boolean>(false); // Default to false for production use
   const [escrowLocked, setEscrowLocked] = useState<boolean>(false);
   const [player1EscrowLocked, setPlayer1EscrowLocked] = useState<boolean>(false);
   const [player2EscrowLocked, setPlayer2EscrowLocked] = useState<boolean>(false);
@@ -73,18 +73,17 @@ export function useEscrow() {
         if (response && response.address === player1Wallet.address) {
           console.log("Connected to correct wallet, creating escrow");
           
-          const createEscrowResult = await escrowAdapter.createEscrow(
+          const initializeEscrowResult = await escrowAdapter.initializeEscrow(
             window.aptos,
             player1Wallet.address,
             player2Wallet.address,
             0.1, // Minimum bet of 0.1 APT
-            player1Wallet.address, // Use player 1 as arbiter
             24 * 60 * 60 // 24 hour timeout
           );
           
-          if (createEscrowResult) {
-            setEscrowAddress(createEscrowResult);
-            console.log("Escrow contract created with address:", createEscrowResult);
+          if (initializeEscrowResult) {
+            setEscrowAddress(initializeEscrowResult);
+            console.log("Escrow contract created with address:", initializeEscrowResult);
             setIsLoading(false);
             return;
           }

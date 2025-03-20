@@ -87,7 +87,27 @@
   }
 
   .ai-panel {
-    @apply glass-card p-6 bg-gradient-to-tr from-dark-800 to-dark-700;
+    @apply panel bg-gradient-to-tr from-dark-800 to-dark-700;
+  }
+
+  .training-panel {
+    @apply panel bg-gradient-to-br from-purple-900/20 to-purple-700/10;
+  }
+
+  .training-analysis {
+    @apply p-3 mb-4 rounded-md border;
+  }
+
+  .training-analysis-good {
+    @apply training-analysis bg-green-900/20 border-green-700/30 text-green-400;
+  }
+
+  .training-analysis-neutral {
+    @apply training-analysis bg-yellow-900/20 border-yellow-700/30 text-yellow-400;
+  }
+
+  .training-analysis-bad {
+    @apply training-analysis bg-red-900/20 border-red-700/30 text-red-400;
   }
 
   .betting-card {
@@ -156,6 +176,10 @@
     @apply btn bg-error-600 hover:bg-error-700 text-white focus:ring-error-500;
   }
 
+  .btn-training {
+    @apply btn bg-purple-600 hover:bg-purple-700 text-white focus:ring-purple-500;
+  }
+
   .input-field {
     @apply px-4 py-2 border border-dark-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-dark-800/80 backdrop-blur-sm transition-all duration-200 text-gray-100;
   }
@@ -166,5 +190,9 @@
 
   .text-blue-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-400 to-primary-600;
+  }
+
+  .text-purple-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-purple-600;
   }
 }

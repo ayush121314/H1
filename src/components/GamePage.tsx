@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import { GameDashboard } from './GameDashboard';
 import PlayerPanel from './PlayerPanel';
 import ChessGamePanel from './ChessGamePanel';
+import AIAgentPanel from './AIAgentPanel';
+import TrainingPanel from './TrainingPanel';
+import { trainingAgentService } from '../agent/TrainingAgentService';
 
 // Mock data for demonstration
 const mockData = {
-  gameState: 'playing',
+  gameState: 'waiting', // Changed to 'waiting' to ensure toggles are enabled
   player1Wallet: { address: '0x1234567890123456789012345678901234567890', balance: 75 },
   player2Wallet: { address: '0x2345678901234567890123456789012345678901', balance: 60 },
   player1Bet: 15,
@@ -23,10 +26,28 @@ const mockData = {
 };
 
 const GamePage: React.FC = () => {
+  // Add state for AI betting agent and training mode
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [useSimulationMode, setUseSimulationMode] = useState(true);
+  const [trainingModeEnabled, setTrainingModeEnabled] = useState(false);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | undefined>(undefined);
+  
+  // Enable/disable the training agent when training mode is toggled
+  useEffect(() => {
+    trainingAgentService.setEnabled(trainingModeEnabled);
+  }, [trainingModeEnabled]);
+  
   // These would normally be implemented with actual state and logic
   const handleDrop = (sourceSquare: string, targetSquare: string) => {
     console.log(`Move from ${sourceSquare} to ${targetSquare}`);
+    // Set the last move for training mode analysis
+    setLastMove({ from: sourceSquare, to: targetSquare });
     return true;
+  };
+
+  const handleSuggestMove = (move: { from: string; to: string; promotion?: string }) => {
+    console.log(`Suggesting move from ${move.from} to ${move.to}`);
+    // In a real implementation, this would highlight the suggested move on the board
   };
 
   const handleAnnounceUnifiedBet = () => {
@@ -35,6 +56,8 @@ const GamePage: React.FC = () => {
 
   const handleStartNewGame = () => {
     console.log('Starting new game');
+    // Reset the last move for training mode
+    setLastMove(undefined);
   };
 
   const handleForfeit = () => {
@@ -60,6 +83,9 @@ const GamePage: React.FC = () => {
   const handleLockEscrow = (playerNumber: number) => {
     console.log(`Locking escrow for player ${playerNumber}`);
   };
+
+  // Debugging - log when component renders
+  console.log("GamePage rendering with AI enabled:", aiEnabled, "Training enabled:", trainingModeEnabled);
 
   return (
     <Layout currentPage="game">
@@ -105,7 +131,7 @@ const GamePage: React.FC = () => {
             playerEscrowLocked={mockData.player1EscrowLocked}
             otherPlayerBet={mockData.player2Bet}
             gameState={mockData.gameState}
-            useSimulationMode={true}
+            useSimulationMode={useSimulationMode}
             onConnectWallet={() => handleConnectWallet(1)}
             onDisconnectWallet={() => handleDisconnectWallet(1)}
             onSetManualWalletAddress={() => handleSetManualWalletAddress(1)}
@@ -119,11 +145,32 @@ const GamePage: React.FC = () => {
             playerEscrowLocked={mockData.player2EscrowLocked}
             otherPlayerBet={mockData.player1Bet}
             gameState={mockData.gameState}
-            useSimulationMode={true}
+            useSimulationMode={useSimulationMode}
             onConnectWallet={() => handleConnectWallet(2)}
             onDisconnectWallet={() => handleDisconnectWallet(2)}
             onSetManualWalletAddress={() => handleSetManualWalletAddress(2)}
             onLockEscrow={() => handleLockEscrow(2)}
+          />
+          
+          {/* AI Agent Panel - Now rendered unconditionally */}
+          <div className="mb-6">
+            <AIAgentPanel
+              aiEnabled={aiEnabled}
+              setAiEnabled={setAiEnabled}
+              gameState={mockData.gameState as any}
+              useSimulationMode={useSimulationMode}
+              setUseSimulationMode={setUseSimulationMode}
+              trainingModeEnabled={trainingModeEnabled}
+              setTrainingModeEnabled={setTrainingModeEnabled}
+            />
+          </div>
+          
+          {/* Training Panel - only visible when training mode is enabled */}
+          <TrainingPanel
+            trainingModeEnabled={trainingModeEnabled}
+            fen={mockData.game.fen()}
+            lastMove={lastMove}
+            onSuggestMove={handleSuggestMove}
           />
         </div>
       </div>
