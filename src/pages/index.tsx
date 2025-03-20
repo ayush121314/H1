@@ -273,93 +273,108 @@ export default function Home() {
     );
   }
 
-  // Two player mode (default)
+  // Two Player Mode
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto p-4">
       <Head>
-        <title>Chess Game with Aptos</title>
-        <meta name="description" content="Play chess with Aptos blockchain integration" />
-        <link rel="icon" href="/favicon.ico" />
+        <title>Chess GameFi - Two Player Mode</title>
       </Head>
 
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-center text-gradient">Chess Game with Aptos</h1>
-        <button
-          onClick={() => setCurrentMode('mainMenu')}
-          className="btn-secondary flex items-center"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Menu
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left panel - Player 1 */}
-        <PlayerPanel 
-          playerNumber={1}
-          playerWallet={walletHook.player1Wallet}
-          playerBet={bettingHook.player1Bet}
-          playerEscrowLocked={escrowHook.player1EscrowLocked}
-          otherPlayerBet={bettingHook.player2Bet}
-          gameState={gameHook.gameState}
-          useSimulationMode={escrowHook.useSimulationMode}
-          onConnectWallet={walletHook.connectPlayerWallet}
-          onDisconnectWallet={walletHook.disconnectWallet}
-          onSetManualWalletAddress={walletHook.setManualWalletAddress}
-          onLockEscrow={() => handleLockEscrow(1)}
-        />
-          
-        {/* Middle panel - Game */}
-        <ChessGamePanel
-          game={gameHook.game}
-          gameState={gameHook.gameState}
-          currentPlayer={gameHook.currentPlayer}
-          winner={gameHook.winner}
-          finalBetAmount={bettingHook.finalBetAmount}
+      <div className="mb-6">
+        <GameDashboard 
+          gameState={gameHook.gameState as any}
           player1Wallet={walletHook.player1Wallet}
           player2Wallet={walletHook.player2Wallet}
           player1Bet={bettingHook.player1Bet}
           player2Bet={bettingHook.player2Bet}
-          onDrop={gameHook.onDrop}
-          onAnnounceUnifiedBet={handleAnnounceUnifiedBet}
-          onStartNewGame={handleStartNewGame}
-          onForfeit={handleForfeit}
-          onPlayer1BetChange={bettingHook.setPlayer1Bet}
-          onPlayer2BetChange={bettingHook.setPlayer2Bet}
-        />
-            
-        {/* Right panel - Player 2 */}
-        <PlayerPanel 
-          playerNumber={2}
-          playerWallet={walletHook.player2Wallet}
-          playerBet={bettingHook.player2Bet}
-          playerEscrowLocked={escrowHook.player2EscrowLocked}
-          otherPlayerBet={bettingHook.player1Bet}
-          gameState={gameHook.gameState}
-          useSimulationMode={escrowHook.useSimulationMode}
-          onConnectWallet={walletHook.connectPlayerWallet}
-          onDisconnectWallet={walletHook.disconnectWallet}
-          onSetManualWalletAddress={walletHook.setManualWalletAddress}
-          onLockEscrow={() => handleLockEscrow(2)}
+          player1EscrowLocked={escrowHook.player1EscrowLocked}
+          player2EscrowLocked={escrowHook.player2EscrowLocked}
+          escrowLocked={escrowHook.escrowLocked}
+          finalBetAmount={bettingHook.finalBetAmount}
+          winner={gameHook.winner as any}
         />
       </div>
 
-      {/* Contract status panel */}
-      <EscrowPanel 
-        escrowAddress={escrowHook.escrowAddress}
-        escrowStatus={escrowHook.escrowStatus}
-        escrowBalance={escrowHook.escrowBalance}
-        useSimulationMode={escrowHook.useSimulationMode}
-        setUseSimulationMode={escrowHook.setUseSimulationMode}
-        onConnectEscrowWallet={escrowHook.connectEscrowWallet}
-        onDisconnectEscrow={() => escrowHook.setEscrowAddress(null)}
-        onCreateSimulatedEscrow={escrowHook.createSimulatedEscrow}
-        onInitializeEscrow={handleInitializeEscrow}
-        onResetGame={resetAllState}
-        onResetWallets={walletHook.resetWalletConnections}
-      />
+      <button 
+        className="mb-6 inline-flex items-center px-4 py-2 bg-dark-800 hover:bg-dark-700 rounded-lg transition-colors"
+        onClick={() => setCurrentMode('mainMenu')}
+      >
+        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Back to Menu
+      </button>
+
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left side - Controls */}
+        <div className="w-full lg:w-80 flex flex-col gap-4">
+          {/* Player 1 */}
+          <PlayerPanel 
+            playerNumber={1}
+            playerWallet={walletHook.player1Wallet}
+            playerBet={bettingHook.player1Bet}
+            playerEscrowLocked={escrowHook.player1EscrowLocked}
+            otherPlayerBet={bettingHook.player2Bet}
+            gameState={gameHook.gameState}
+            useSimulationMode={escrowHook.useSimulationMode}
+            onConnectWallet={walletHook.connectPlayerWallet}
+            onDisconnectWallet={walletHook.disconnectWallet}
+            onSetManualWalletAddress={walletHook.setManualWalletAddress}
+            onLockEscrow={() => handleLockEscrow(1)}
+          />
+          
+          {/* Player 2 */}
+          <PlayerPanel 
+            playerNumber={2}
+            playerWallet={walletHook.player2Wallet}
+            playerBet={bettingHook.player2Bet}
+            playerEscrowLocked={escrowHook.player2EscrowLocked}
+            otherPlayerBet={bettingHook.player1Bet}
+            gameState={gameHook.gameState}
+            useSimulationMode={escrowHook.useSimulationMode}
+            onConnectWallet={walletHook.connectPlayerWallet}
+            onDisconnectWallet={walletHook.disconnectWallet}
+            onSetManualWalletAddress={walletHook.setManualWalletAddress}
+            onLockEscrow={() => handleLockEscrow(2)}
+          />
+          
+          {/* Escrow Panel */}
+          <EscrowPanel 
+            escrowAddress={escrowHook.escrowAddress}
+            escrowStatus={escrowHook.escrowStatus}
+            escrowBalance={escrowHook.escrowBalance}
+            useSimulationMode={escrowHook.useSimulationMode}
+            setUseSimulationMode={escrowHook.setUseSimulationMode}
+            onConnectEscrowWallet={escrowHook.connectEscrowWallet}
+            onDisconnectEscrow={() => escrowHook.setEscrowAddress(null)}
+            onCreateSimulatedEscrow={escrowHook.createSimulatedEscrow}
+            onInitializeEscrow={handleInitializeEscrow}
+            onResetGame={resetAllState}
+            onResetWallets={walletHook.resetWalletConnections}
+          />
+        </div>
+        
+        {/* Right side - Game Board */}
+        <div className="flex-1">
+          <ChessGamePanel
+            game={gameHook.game}
+            gameState={gameHook.gameState}
+            currentPlayer={gameHook.currentPlayer}
+            winner={gameHook.winner}
+            finalBetAmount={bettingHook.finalBetAmount}
+            player1Wallet={walletHook.player1Wallet}
+            player2Wallet={walletHook.player2Wallet}
+            player1Bet={bettingHook.player1Bet}
+            player2Bet={bettingHook.player2Bet}
+            onDrop={gameHook.onDrop}
+            onAnnounceUnifiedBet={handleAnnounceUnifiedBet}
+            onStartNewGame={handleStartNewGame}
+            onForfeit={handleForfeit}
+            onPlayer1BetChange={bettingHook.setPlayer1Bet}
+            onPlayer2BetChange={bettingHook.setPlayer2Bet}
+          />
+        </div>
+      </div>
     </div>
   );
 } 

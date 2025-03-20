@@ -58,6 +58,91 @@
     @apply flex flex-col space-y-6;
   }
 
+  .p2p-game-layout {
+    @apply h-full w-full grid gap-4;
+    grid-template-areas:
+      "header header"
+      "controls game"
+      "ai-training ai-training";
+    grid-template-columns: 320px 1fr;
+  }
+
+  @media (max-width: 1024px) {
+    .p2p-game-layout {
+      grid-template-areas:
+        "header"
+        "controls"
+        "game"
+        "ai-training";
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .p2p-game-layout {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+  }
+
+  .game-header {
+    @apply w-full;
+    grid-area: header;
+  }
+
+  .game-board-container {
+    @apply w-full max-w-4xl mx-auto;
+    grid-area: game;
+  }
+
+  .side-container {
+    grid-area: controls;
+    @apply flex flex-col gap-3 bg-dark-800/50 p-4 rounded-xl border border-dark-700/50;
+    width: 320px;
+    align-self: start;
+  }
+
+  .players-container {
+    @apply flex flex-col gap-3;
+  }
+
+  .player-panel {
+    @apply glass-card p-3 bg-gradient-to-br from-dark-800 to-dark-700;
+  }
+
+  .escrow-container {
+    @apply mt-3;
+  }
+
+  .ai-training-container {
+    @apply space-y-4;
+    grid-area: ai-training;
+  }
+
+  .chess-board-p2p {
+    @apply flex justify-center items-center py-4;
+    min-height: 500px;
+  }
+
+  @media (min-width: 1024px) {
+    .chess-board-p2p {
+      min-height: 550px;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .chess-board-p2p {
+      min-height: 600px;
+    }
+  }
+
+  .betting-controls {
+    @apply bg-dark-800/50 border-t border-dark-700 backdrop-blur-sm;
+  }
+
+  .game-controls {
+    @apply bg-dark-800/50 backdrop-blur-sm;
+  }
+
   .glass-card {
     @apply bg-dark-800/80 backdrop-blur-glass rounded-2xl shadow-dark border border-dark-700/50;
   }
@@ -75,15 +160,12 @@
   }
 
   .game-dashboard {
-    @apply mb-6 p-6 glass-card bg-gradient-to-br from-dark-800 to-dark-900;
+    @apply mb-4 p-4 glass-card bg-gradient-to-br from-dark-800 to-dark-900;
   }
 
   .escrow-panel {
-    @apply glass-card p-6 bg-gradient-to-br from-accent-900/20 to-primary-900/20;
-  }
-
-  .player-panel {
-    @apply glass-card p-6 bg-gradient-to-br from-dark-800 to-dark-700;
+    @apply glass-card p-3 bg-gradient-to-br from-accent-900/20 to-primary-900/20;
+    margin-top: 0.75rem;
   }
 
   .ai-panel {

@@ -30,100 +30,61 @@ const EscrowPanel: React.FC<EscrowPanelProps> = ({
   onResetWallets
 }) => {
   return (
-    <div className="mt-8 p-4 bg-gray-200  rounded">
-      {/* <h3 className="text-lg font-bold mb-2">Contract Status</h3> */}
-      <div className="grid grid-cols-1  md:grid-cols-2 gap-4">
-        <div>
-          {/* <p><strong>Escrow Address:</strong> {escrowAddress || 'Not connected'}</p>
-          <p><strong>Status:</strong> {EscrowStatus[escrowStatus]}</p>
-          <p><strong>Escrow Balance:</strong> {escrowBalance} APT</p>
-           */}
-          {/* Escrow wallet connection panel */}
-          <div className="mt-4 p-4 bg-indigo-50 border  border-indigo-200 rounded">
-            <h4 className="font-bold text-indigo-800">Escrow Wallet</h4>
-            {escrowAddress ? (
-              <div className="mt-2 ">
-                <p className="text-indigo-700">Escrow wallet connected:</p>
-                <p className="font-mono text-sm mt-1">{escrowAddress}</p>
-                <button
-                  className="mt-2 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
-                  onClick={onDisconnectEscrow}
-                >
-                  Disconnect Escrow
-                </button>
-              </div>
-            ) : (
-              <div className="mt-2">
-                <p className="text-indigo-700 mb-2">Connect your escrow wallet:</p>
-                <button
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded w-full"
-                  onClick={onConnectEscrowWallet}
-                  disabled={useSimulationMode}
-                >
-                  Connect Escrow Wallet
-                </button>
-                <p className="text-xs text-indigo-600 mt-1">
-                  The escrow wallet will hold funds during the game and distribute to the winner.
-                </p>
-              </div>
-            )}
+    <div className="escrow-panel p-4 bg-gradient-to-br from-accent-900/20 to-primary-900/20 rounded">
+      <div className="flex items-center mb-3">
+        <div className="w-3 h-3 rounded-full bg-accent-500 mr-2"></div>
+        <h3 className="text-lg font-bold text-gradient">Escrow Wallet</h3>
+      </div>
+      
+      {escrowAddress ? (
+        <div className="glass-card p-3 bg-dark-800/80">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm text-accent-400 font-medium">Connected</span>
+            <span className="text-xs bg-accent-900/20 text-accent-400 px-2 py-0.5 rounded-full">Active</span>
+          </div>
+          <div className="flex items-center mb-3">
+            <svg className="w-4 h-4 text-accent-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <p className="font-mono text-xs text-gray-300">{formatWalletAddress(escrowAddress)}</p>
           </div>
           
-          {/* Wallet Connection Tips */}
-          <div className="mt-4 p-2 bg-blue-50 border border-blue-200 rounded">
-            <p className="text-blue-800 font-medium">3-Wallet Setup Instructions:</p>
-            <ol className="list-decimal list-inside text-blue-700 pl-2 text-sm space-y-1 mt-1">
-              <li>Connect Player 1 wallet first</li>
-              <li>Connect Player 2 wallet second (make sure to switch to a different wallet in Petra)</li>
-              <li>Connect the Escrow wallet third (should be a separate wallet from both players)</li>
-              <li>Place bets and lock escrow to start the game</li>
-              <li>After game completes, the escrow wallet will pay the winner</li>
-            </ol>
+          <div className="flex items-center justify-between text-sm mb-3">
+            <span className="text-gray-400">Balance:</span>
+            <span className="font-mono text-accent-400 font-medium">{escrowBalance} APT</span>
           </div>
+          
+          <button
+            className="btn-outline text-error-400 border-error-600 hover:bg-error-900/20 py-1 px-3 text-sm w-full"
+            onClick={onDisconnectEscrow}
+          >
+            Disconnect Escrow
+          </button>
         </div>
-        <div>
-          {/* <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="simulationMode"
-              checked={useSimulationMode}
-              onChange={(e) => setUseSimulationMode(e.target.checked)}
-              className="mr-2"
-            />
-            <label htmlFor="simulationMode">Simulation Mode (No real transactions)</label>
-          </div>
-          <p className="text-sm text-gray-600 mt-1">
-            Enable simulation mode to test the game flow without actual blockchain transactions.
+      ) : (
+        <div className="glass-card p-3 bg-dark-800/80">
+          <p className="text-sm text-gray-300 mb-3">
+            The escrow wallet holds funds during the game and distributes to the winner.
           </p>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button 
-              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded"
-              onClick={onInitializeEscrow}
-              disabled={useSimulationMode}
-            >
-              Initialize Escrow
-            </button>
-            <button
-              className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded"
-              onClick={onCreateSimulatedEscrow}
-              disabled={!useSimulationMode}
-            >
-              Create Simulated Escrow
-            </button>
-            <button
-              className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded"
-              onClick={onResetGame}
-            >
-              Reset Game
-            </button>
-            <button
-              className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded"
-              onClick={onResetWallets}
-            >
-              Reset All Wallets
-            </button>
-          </div> */}
+          <button
+            className="btn-accent w-full py-2"
+            onClick={onConnectEscrowWallet}
+            disabled={useSimulationMode}
+          >
+            Connect Escrow Wallet
+          </button>
         </div>
+      )}
+      
+      {/* Quick instructions */}
+      <div className="mt-3 p-2 bg-dark-800/50 rounded text-xs text-gray-400">
+        <p className="font-medium text-accent-400 mb-1">Quick Setup:</p>
+        <ol className="list-decimal list-inside space-y-0.5 pl-1">
+          <li>Connect Player 1 wallet (White)</li>
+          <li>Connect Player 2 wallet (Black)</li>
+          <li>Connect Escrow wallet</li>
+          <li>Set bets and lock escrow</li>
+        </ol>
       </div>
     </div>
   );
