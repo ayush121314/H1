@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { useAIPlayer } from '../hooks/useAIPlayer';
+import TrainingPanel from './TrainingPanel';
+import { trainingAgentService } from '../agent/TrainingAgentService';
+import { Square } from 'react-chessboard/dist/chessboard/types';
 
 interface AIVsPersonModeProps {
   onExit: () => void;
@@ -14,8 +17,24 @@ const AIVsPersonMode: React.FC<AIVsPersonModeProps> = ({ onExit }) => {
   const [gameStatus, setGameStatus] = useState<'playing' | 'checkmate' | 'draw' | 'stalemate'>('playing');
   const [winner, setWinner] = useState<'player' | 'ai' | 'draw' | null>(null);
   
+  // Training mode states
+  const [trainingModeEnabled, setTrainingModeEnabled] = useState(true);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | undefined>(undefined);
+  const [suggestedMove, setSuggestedMove] = useState<{ from: string; to: string; promotion?: string } | null>(null);
+  
   // Get AI player hook (always using medium difficulty)
   const { getAIMove, isAIThinking } = useAIPlayer();
+  
+  // Enable/disable the training agent when training mode is toggled
+  useEffect(() => {
+    trainingAgentService.setEnabled(trainingModeEnabled);
+    
+    // When training mode is enabled, make sure game state is updated
+    if (trainingModeEnabled && game) {
+      console.log('Initializing training agent with current game state');
+      trainingAgentService.updateGameState(game.fen());
+    }
+  }, [trainingModeEnabled, game]);
   
   // Make a move and update the game state
   const makeMove = (move: { from: string, to: string }) => {
@@ -34,6 +53,14 @@ const AIVsPersonMode: React.FC<AIVsPersonModeProps> = ({ onExit }) => {
       // Update game state
       setGame(gameCopy);
       
+      // Record last move for training panel
+      setLastMove({ from: move.from, to: move.to });
+      
+      // Update training agent
+      if (trainingModeEnabled) {
+        trainingAgentService.updateGameState(gameCopy.fen());
+      }
+      
       // Check for game end conditions
       if (gameCopy.isCheckmate()) {
         setGameStatus('checkmate');
@@ -51,6 +78,17 @@ const AIVsPersonMode: React.FC<AIVsPersonModeProps> = ({ onExit }) => {
       console.error('Invalid move', error);
       return false;
     }
+  };
+  
+  // Handle suggesting a move from training panel
+  const handleSuggestMove = (move: { from: string; to: string; promotion?: string }) => {
+    console.log(`Suggesting move from ${move.from} to ${move.to}`);
+    setSuggestedMove(move);
+    
+    // Clear the suggestion after 5 seconds
+    setTimeout(() => {
+      setSuggestedMove(null);
+    }, 5000);
   };
   
   // Handle AI's turn
@@ -88,6 +126,13 @@ const AIVsPersonMode: React.FC<AIVsPersonModeProps> = ({ onExit }) => {
     setGame(new Chess());
     setGameStatus('playing');
     setWinner(null);
+    setLastMove(undefined);
+    setSuggestedMove(null);
+    
+    // Update training agent
+    if (trainingModeEnabled) {
+      trainingAgentService.updateGameState(new Chess().fen());
+    }
   };
   
   // Switch player color
@@ -110,7 +155,34 @@ const AIVsPersonMode: React.FC<AIVsPersonModeProps> = ({ onExit }) => {
   return (
     <div className="ai-vs-person-mode">
       <div className="panel bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 relative overflow-hidden p-6 rounded-lg">
-        <h2 className="text-2xl font-bold mb-4 text-center text-gradient">AI vs Person Mode</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold text-gradient">AI vs Person Mode</h2>
+          
+          <div className="flex items-center">
+            <span className="text-sm text-gray-300 mr-2">Training Mode</span>
+            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+              <input
+                type="checkbox"
+                id="training-toggle"
+                className="absolute w-6 h-6 opacity-0 cursor-pointer z-10"
+                checked={trainingModeEnabled}
+                onChange={(e) => setTrainingModeEnabled(e.target.checked)}
+              />
+              <label
+                htmlFor="training-toggle"
+                className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${
+                  trainingModeEnabled ? 'bg-purple-500' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`toggle-dot absolute top-0 left-0 w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                    trainingModeEnabled ? 'translate-x-6' : 'translate-x-0'
+                  }`}
+                ></span>
+              </label>
+            </div>
+          </div>
+        </div>
         
         <div className="flex items-center justify-center mb-4">
           <span className="px-3 py-1 bg-accent-900/40 border border-accent-700/50 rounded-full text-sm text-accent-300">
@@ -138,31 +210,51 @@ const AIVsPersonMode: React.FC<AIVsPersonModeProps> = ({ onExit }) => {
           </div>
         </div>
         
-        <div className="mb-6">
-          <div className="chess-board bg-dark-800">
-            <Chessboard
-              position={game.fen()}
-              onPieceDrop={onDrop}
-              boardOrientation={playerColor}
-              customBoardStyle={{
-                boxShadow: '0 8px 16px rgba(0, 0, 0, 0.5)',
-                borderRadius: '0.5rem',
-                overflow: 'hidden'
-              }}
-              customDarkSquareStyle={{ backgroundColor: '#1e293b' }}
-              customLightSquareStyle={{ backgroundColor: '#334155' }}
-            />
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="lg:flex-1">
+            <div className="chess-board bg-dark-800">
+              <Chessboard
+                position={game.fen()}
+                onPieceDrop={onDrop}
+                boardOrientation={playerColor}
+                customBoardStyle={{
+                  boxShadow: '0 8px 16px rgba(0, 0, 0, 0.5)',
+                  borderRadius: '0.5rem',
+                  overflow: 'hidden'
+                }}
+                customDarkSquareStyle={{ backgroundColor: '#1e293b' }}
+                customLightSquareStyle={{ backgroundColor: '#334155' }}
+                customArrows={suggestedMove ? [
+                  [
+                    suggestedMove.from as Square, 
+                    suggestedMove.to as Square, 
+                    'rgba(124, 58, 237, 0.8)'
+                  ]
+                ] : []}
+              />
+            </div>
           </div>
+          
+          {trainingModeEnabled && (
+            <div className="lg:w-80">
+              <TrainingPanel
+                trainingModeEnabled={trainingModeEnabled}
+                fen={game.fen()}
+                lastMove={lastMove}
+                onSuggestMove={handleSuggestMove}
+              />
+            </div>
+          )}
         </div>
         
         {isAIThinking && (
-          <div className="text-center mb-4">
+          <div className="text-center mt-4">
             <p className="text-accent-400">AI is thinking...</p>
           </div>
         )}
         
         {gameStatus !== 'playing' && (
-          <div className="glass-card p-6 text-center mb-6 bg-gradient-to-br from-accent-900/20 to-primary-900/20 border border-accent-800/30">
+          <div className="glass-card p-6 text-center my-6 bg-gradient-to-br from-accent-900/20 to-primary-900/20 border border-accent-800/30">
             <h3 className="text-2xl font-bold mb-4 text-gradient">
               {winner === 'player' ? 'You Win!' : 
                winner === 'ai' ? 'AI Wins!' : 

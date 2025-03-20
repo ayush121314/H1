@@ -65,6 +65,7 @@
       "controls game"
       "ai-training ai-training";
     grid-template-columns: 320px 1fr;
+    grid-template-rows: auto 1fr auto;
   }
 
   @media (max-width: 1024px) {
@@ -75,12 +76,17 @@
         "game"
         "ai-training";
       grid-template-columns: 1fr;
+      grid-template-rows: auto auto 1fr auto;
     }
   }
 
   @media (min-width: 1280px) {
     .p2p-game-layout {
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-areas:
+        "header header header"
+        "controls game ai-training";
+      grid-template-columns: 320px 1fr 320px;
+      grid-template-rows: auto 1fr;
     }
   }
 
@@ -118,6 +124,13 @@
     grid-area: ai-training;
   }
 
+  @media (min-width: 1280px) {
+    .ai-training-container {
+      @apply h-full;
+      align-self: start;
+    }
+  }
+
   .chess-board-p2p {
     @apply flex justify-center items-center py-4;
     min-height: 500px;
@@ -132,6 +145,9 @@
   @media (min-width: 1280px) {
     .chess-board-p2p {
       min-height: 600px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
   }
 
@@ -170,6 +186,15 @@
 
   .ai-panel {
     @apply panel bg-gradient-to-tr from-dark-800 to-dark-700;
+    width: 100%;
+  }
+
+  @media (min-width: 1280px) {
+    .ai-panel {
+      height: auto;
+      max-height: 700px;
+      overflow-y: auto;
+    }
   }
 
   .training-panel {

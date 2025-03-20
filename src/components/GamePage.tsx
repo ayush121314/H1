@@ -115,55 +115,59 @@ const GamePage: React.FC = () => {
           />
         </div>
 
-        {/* Main game layout */}
-        <div className="flex flex-col lg:flex-row gap-6">
+        {/* Main game layout using p2p-game-layout class */}
+        <div className="p2p-game-layout">
           {/* Left Side - Controls */}
-          <div className="w-full lg:w-80 flex flex-col gap-4">
-            <PlayerPanel
-              playerNumber={1}
-              playerWallet={mockData.player1Wallet as any}
-              playerBet={mockData.player1Bet}
-              playerEscrowLocked={mockData.player1EscrowLocked}
-              otherPlayerBet={mockData.player2Bet}
-              gameState={mockData.gameState}
-              useSimulationMode={useSimulationMode}
-              onConnectWallet={() => handleConnectWallet(1)}
-              onDisconnectWallet={() => handleDisconnectWallet(1)}
-              onSetManualWalletAddress={() => handleSetManualWalletAddress(1)}
-              onLockEscrow={() => handleLockEscrow(1)}
-            />
+          <div className="side-container">
+            <div className="players-container">
+              <PlayerPanel
+                playerNumber={1}
+                playerWallet={mockData.player1Wallet as any}
+                playerBet={mockData.player1Bet}
+                playerEscrowLocked={mockData.player1EscrowLocked}
+                otherPlayerBet={mockData.player2Bet}
+                gameState={mockData.gameState}
+                useSimulationMode={useSimulationMode}
+                onConnectWallet={() => handleConnectWallet(1)}
+                onDisconnectWallet={() => handleDisconnectWallet(1)}
+                onSetManualWalletAddress={() => handleSetManualWalletAddress(1)}
+                onLockEscrow={() => handleLockEscrow(1)}
+              />
+              
+              <PlayerPanel
+                playerNumber={2}
+                playerWallet={mockData.player2Wallet as any}
+                playerBet={mockData.player2Bet}
+                playerEscrowLocked={mockData.player2EscrowLocked}
+                otherPlayerBet={mockData.player1Bet}
+                gameState={mockData.gameState}
+                useSimulationMode={useSimulationMode}
+                onConnectWallet={() => handleConnectWallet(2)}
+                onDisconnectWallet={() => handleDisconnectWallet(2)}
+                onSetManualWalletAddress={() => handleSetManualWalletAddress(2)}
+                onLockEscrow={() => handleLockEscrow(2)}
+              />
+            </div>
             
-            <PlayerPanel
-              playerNumber={2}
-              playerWallet={mockData.player2Wallet as any}
-              playerBet={mockData.player2Bet}
-              playerEscrowLocked={mockData.player2EscrowLocked}
-              otherPlayerBet={mockData.player1Bet}
-              gameState={mockData.gameState}
-              useSimulationMode={useSimulationMode}
-              onConnectWallet={() => handleConnectWallet(2)}
-              onDisconnectWallet={() => handleDisconnectWallet(2)}
-              onSetManualWalletAddress={() => handleSetManualWalletAddress(2)}
-              onLockEscrow={() => handleLockEscrow(2)}
-            />
-            
-            <EscrowPanel
-              escrowAddress={mockData.player1Wallet?.address || null}
-              escrowStatus={0}
-              escrowBalance={100}
-              useSimulationMode={useSimulationMode}
-              setUseSimulationMode={setUseSimulationMode}
-              onConnectEscrowWallet={handleConnectEscrowWallet}
-              onDisconnectEscrow={handleDisconnectEscrow}
-              onCreateSimulatedEscrow={() => {}}
-              onInitializeEscrow={() => {}}
-              onResetGame={handleStartNewGame}
-              onResetWallets={() => {}}
-            />
+            <div className="escrow-container">
+              <EscrowPanel
+                escrowAddress={mockData.player1Wallet?.address || null}
+                escrowStatus={0}
+                escrowBalance={100}
+                useSimulationMode={useSimulationMode}
+                setUseSimulationMode={setUseSimulationMode}
+                onConnectEscrowWallet={handleConnectEscrowWallet}
+                onDisconnectEscrow={handleDisconnectEscrow}
+                onCreateSimulatedEscrow={() => {}}
+                onInitializeEscrow={() => {}}
+                onResetGame={handleStartNewGame}
+                onResetWallets={() => {}}
+              />
+            </div>
           </div>
           
           {/* Right Side - Game Board */}
-          <div className="flex-1">
+          <div className="game-board-container">
             <ChessGamePanel
               game={mockData.game}
               gameState={mockData.gameState as any}
@@ -182,28 +186,28 @@ const GamePage: React.FC = () => {
               onPlayer2BetChange={(amount) => handlePlayerBetChange(2, amount)}
             />
           </div>
-        </div>
-        
-        {/* AI and Training panels */}
-        <div className="mt-6">
-          <AIAgentPanel
-            aiEnabled={aiEnabled}
-            setAiEnabled={setAiEnabled}
-            gameState={mockData.gameState as any}
-            useSimulationMode={useSimulationMode}
-            setUseSimulationMode={setUseSimulationMode}
-            trainingModeEnabled={trainingModeEnabled}
-            setTrainingModeEnabled={setTrainingModeEnabled}
-          />
           
-          {trainingModeEnabled && (
-            <TrainingPanel
+          {/* AI and Training panels */}
+          <div className="ai-training-container">
+            <AIAgentPanel
+              aiEnabled={aiEnabled}
+              setAiEnabled={setAiEnabled}
+              gameState={mockData.gameState as any}
+              useSimulationMode={useSimulationMode}
+              setUseSimulationMode={setUseSimulationMode}
               trainingModeEnabled={trainingModeEnabled}
-              fen={mockData.game.fen()}
-              lastMove={lastMove}
-              onSuggestMove={handleSuggestMove}
+              setTrainingModeEnabled={setTrainingModeEnabled}
             />
-          )}
+            
+            {trainingModeEnabled && (
+              <TrainingPanel
+                trainingModeEnabled={trainingModeEnabled}
+                fen={mockData.game.fen()}
+                lastMove={lastMove}
+                onSuggestMove={handleSuggestMove}
+              />
+            )}
+          </div>
         </div>
       </div>
     </Layout>
