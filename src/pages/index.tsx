@@ -7,7 +7,10 @@ import PlayerPanel from '../components/PlayerPanel';
 import ChessGamePanel from '../components/ChessGamePanel';
 import EscrowPanel from '../components/EscrowPanel';
 import AIVsPersonMode from '../components/AIVsPersonMode';
+import AIAgentPanel from '../components/AIAgentPanel';
+import TrainingPanel from '../components/TrainingPanel';
 import { transferToEscrow } from '../utils/transactions';
+import { trainingAgentService } from '../agent/TrainingAgentService';
 
 // Import custom hooks
 import { useWalletConnection } from '../hooks/useWalletConnection';
@@ -35,6 +38,12 @@ export default function Home() {
   const gameHook = useChessGame();
   const bettingHook = useBetting();
 
+  // Add state for AI betting agent and training mode
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [trainingModeEnabled, setTrainingModeEnabled] = useState(true);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | undefined>(undefined);
+  const [suggestedMove, setSuggestedMove] = useState<{ from: string; to: string; promotion?: string } | null>(null);
+  
   // Initialize escrow when both wallets are connected
   useEffect(() => {
     if (currentMode === 'twoPlayer' && walletHook.player1Wallet && walletHook.player2Wallet && !escrowHook.escrowAddress && !walletHook.isLoading) {
@@ -61,6 +70,26 @@ export default function Home() {
       gameHook.setGameState('playing');
     }
   }, [escrowHook.player1EscrowLocked, escrowHook.player2EscrowLocked, gameHook.gameState, bettingHook]);
+
+  // Update lastMove when a move is made
+  useEffect(() => {
+    const handleChessMove = (from: string, to: string) => {
+      setLastMove({ from, to });
+    };
+    
+    // Listen for chess moves
+    if (gameHook && gameHook.game) {
+      const originalOnDrop = gameHook.onDrop;
+      
+      gameHook.onDrop = (sourceSquare: string, targetSquare: string) => {
+        const result = originalOnDrop(sourceSquare, targetSquare);
+        if (result) {
+          handleChessMove(sourceSquare, targetSquare);
+        }
+        return result;
+      };
+    }
+  }, [gameHook]);
 
   // Handle escrow locking from a player
   const handleLockEscrow = async (playerNumber: 1 | 2) => {
@@ -173,6 +202,28 @@ export default function Home() {
   const handleInitializeEscrow = () => {
     escrowHook.initializeEscrow(walletHook.player1Wallet, walletHook.player2Wallet);
   };
+
+  // Handle suggesting a move from training panel
+  const handleSuggestMove = (move: { from: string; to: string; promotion?: string }) => {
+    console.log(`Suggesting move from ${move.from} to ${move.to}`);
+    setSuggestedMove(move);
+    
+    // Clear the suggestion after 5 seconds
+    setTimeout(() => {
+      setSuggestedMove(null);
+    }, 5000);
+  };
+
+  // Enable/disable the training agent when training mode is toggled
+  useEffect(() => {
+    trainingAgentService.setEnabled(trainingModeEnabled);
+    
+    // When training mode is enabled, make sure game state is updated
+    if (trainingModeEnabled && gameHook.game) {
+      console.log('Initializing training agent with current game state');
+      trainingAgentService.updateGameState(gameHook.game.fen());
+    }
+  }, [trainingModeEnabled, gameHook.game]);
 
   // Show error panel if there's an error
   const error = walletHook.error || escrowHook.error || bettingHook.error;
@@ -305,57 +356,61 @@ export default function Home() {
         Back to Menu
       </button>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="p2p-game-layout">
         {/* Left side - Controls */}
-        <div className="w-full lg:w-80 flex flex-col gap-4">
-          {/* Player 1 */}
-          <PlayerPanel 
-            playerNumber={1}
-            playerWallet={walletHook.player1Wallet}
-            playerBet={bettingHook.player1Bet}
-            playerEscrowLocked={escrowHook.player1EscrowLocked}
-            otherPlayerBet={bettingHook.player2Bet}
-            gameState={gameHook.gameState}
-            useSimulationMode={escrowHook.useSimulationMode}
-            onConnectWallet={walletHook.connectPlayerWallet}
-            onDisconnectWallet={walletHook.disconnectWallet}
-            onSetManualWalletAddress={walletHook.setManualWalletAddress}
-            onLockEscrow={() => handleLockEscrow(1)}
-          />
+        <div className="side-container">
+          <div className="players-container">
+            {/* Player 1 */}
+            <PlayerPanel 
+              playerNumber={1}
+              playerWallet={walletHook.player1Wallet}
+              playerBet={bettingHook.player1Bet}
+              playerEscrowLocked={escrowHook.player1EscrowLocked}
+              otherPlayerBet={bettingHook.player2Bet}
+              gameState={gameHook.gameState}
+              useSimulationMode={escrowHook.useSimulationMode}
+              onConnectWallet={walletHook.connectPlayerWallet}
+              onDisconnectWallet={walletHook.disconnectWallet}
+              onSetManualWalletAddress={walletHook.setManualWalletAddress}
+              onLockEscrow={() => handleLockEscrow(1)}
+            />
+            
+            {/* Player 2 */}
+            <PlayerPanel 
+              playerNumber={2}
+              playerWallet={walletHook.player2Wallet}
+              playerBet={bettingHook.player2Bet}
+              playerEscrowLocked={escrowHook.player2EscrowLocked}
+              otherPlayerBet={bettingHook.player1Bet}
+              gameState={gameHook.gameState}
+              useSimulationMode={escrowHook.useSimulationMode}
+              onConnectWallet={walletHook.connectPlayerWallet}
+              onDisconnectWallet={walletHook.disconnectWallet}
+              onSetManualWalletAddress={walletHook.setManualWalletAddress}
+              onLockEscrow={() => handleLockEscrow(2)}
+            />
+          </div>
           
-          {/* Player 2 */}
-          <PlayerPanel 
-            playerNumber={2}
-            playerWallet={walletHook.player2Wallet}
-            playerBet={bettingHook.player2Bet}
-            playerEscrowLocked={escrowHook.player2EscrowLocked}
-            otherPlayerBet={bettingHook.player1Bet}
-            gameState={gameHook.gameState}
-            useSimulationMode={escrowHook.useSimulationMode}
-            onConnectWallet={walletHook.connectPlayerWallet}
-            onDisconnectWallet={walletHook.disconnectWallet}
-            onSetManualWalletAddress={walletHook.setManualWalletAddress}
-            onLockEscrow={() => handleLockEscrow(2)}
-          />
-          
-          {/* Escrow Panel */}
-          <EscrowPanel 
-            escrowAddress={escrowHook.escrowAddress}
-            escrowStatus={escrowHook.escrowStatus}
-            escrowBalance={escrowHook.escrowBalance}
-            useSimulationMode={escrowHook.useSimulationMode}
-            setUseSimulationMode={escrowHook.setUseSimulationMode}
-            onConnectEscrowWallet={escrowHook.connectEscrowWallet}
-            onDisconnectEscrow={() => escrowHook.setEscrowAddress(null)}
-            onCreateSimulatedEscrow={escrowHook.createSimulatedEscrow}
-            onInitializeEscrow={handleInitializeEscrow}
-            onResetGame={resetAllState}
-            onResetWallets={walletHook.resetWalletConnections}
-          />
+          <div className="escrow-container">
+            {/* Escrow Panel */}
+            <EscrowPanel 
+              escrowAddress={escrowHook.escrowAddress}
+              escrowStatus={escrowHook.escrowStatus}
+              escrowBalance={escrowHook.escrowBalance}
+              useSimulationMode={escrowHook.useSimulationMode}
+              setUseSimulationMode={escrowHook.setUseSimulationMode}
+              onConnectEscrowWallet={escrowHook.connectEscrowWallet}
+              onDisconnectEscrow={() => escrowHook.setEscrowAddress(null)}
+              onCreateSimulatedEscrow={escrowHook.createSimulatedEscrow}
+              onInitializeEscrow={handleInitializeEscrow}
+              onResetGame={resetAllState}
+              onResetWallets={walletHook.resetWalletConnections}
+            />
+          </div>
         </div>
         
-        {/* Right side - Game Board */}
-        <div className="flex-1">
+        {/* Center - Game Board */}
+        <div className="game-board-container">
           <ChessGamePanel
             game={gameHook.game}
             gameState={gameHook.gameState}
@@ -372,6 +427,18 @@ export default function Home() {
             onForfeit={handleForfeit}
             onPlayer1BetChange={bettingHook.setPlayer1Bet}
             onPlayer2BetChange={bettingHook.setPlayer2Bet}
+            suggestedMove={suggestedMove}
+          />
+        </div>
+        
+        {/* Right side - AI Agent Panel */}
+        <div className="ai-training-container">
+          <AIAgentPanel
+            aiEnabled={aiEnabled}
+            setAiEnabled={setAiEnabled}
+            gameState={gameHook.gameState}
+            useSimulationMode={escrowHook.useSimulationMode}
+            setUseSimulationMode={escrowHook.setUseSimulationMode}
           />
         </div>
       </div>

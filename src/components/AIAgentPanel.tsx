@@ -14,7 +14,7 @@ interface AIAgentPanelProps {
 }
 
 const AIAgentPanel: React.FC<AIAgentPanelProps> = ({
-  aiEnabled,
+  aiEnabled=true,
   setAiEnabled,
   gameState,
   useSimulationMode = false,
@@ -83,12 +83,12 @@ const AIAgentPanel: React.FC<AIAgentPanelProps> = ({
   };
 
   return (
-    <div className="ai-panel">
+    <div className="ai-panel h-full">
       <h2 className="text-xl font-bold mb-4 text-blue-gradient">AI Agent Settings</h2>
       
       <div className="flex items-center justify-between">
-        <span className="font-medium text-gray-200">AI-Facilitated Betting</span>
-        <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+        {/* <span className="font-medium text-gray-200">AI-Facilitated Betting</span> */}
+        {/* <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
           <input
             type="checkbox"
             id="toggle"
@@ -113,7 +113,7 @@ const AIAgentPanel: React.FC<AIAgentPanelProps> = ({
               }`}
             ></span>
           </label>
-        </div>
+        </div> */}
       </div>
 
       {/* Training Mode Toggle */}
@@ -146,7 +146,7 @@ const AIAgentPanel: React.FC<AIAgentPanelProps> = ({
         </div>
       )}
       
-      {setUseSimulationMode && (
+      {/* {setUseSimulationMode && (
         <div className="flex items-center justify-between mt-4">
           <span className="font-medium text-gray-200">Simulation Mode</span>
           <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
@@ -177,7 +177,7 @@ const AIAgentPanel: React.FC<AIAgentPanelProps> = ({
           </div>
         </div>
       )}
-      
+       */}
       <p className="text-sm text-gray-300 mt-4">
         {aiEnabled ? (
           <>
@@ -212,7 +212,7 @@ const AIAgentPanel: React.FC<AIAgentPanelProps> = ({
         </p>
       )}
       
-      {setUseSimulationMode && (
+      {/* {setUseSimulationMode && (
         <p className="text-sm text-gray-300 mt-2">
           {useSimulationMode ? (
             <>
@@ -228,7 +228,7 @@ const AIAgentPanel: React.FC<AIAgentPanelProps> = ({
             </>
           )}
         </p>
-      )}
+      )} */}
 
       <div className="mt-4">
         <h3 className="text-md font-semibold mb-2 text-gray-100">Agent Functions</h3>

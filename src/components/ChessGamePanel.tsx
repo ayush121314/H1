@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { GameState, Winner } from '../types/game';
 
@@ -18,6 +18,7 @@ interface ChessGamePanelProps {
   onForfeit: () => void;
   onPlayer1BetChange?: (amount: number) => void;
   onPlayer2BetChange?: (amount: number) => void;
+  suggestedMove?: { from: string; to: string; promotion?: string } | null;
 }
 
 const ChessGamePanel: React.FC<ChessGamePanelProps> = ({
@@ -35,8 +36,29 @@ const ChessGamePanel: React.FC<ChessGamePanelProps> = ({
   onStartNewGame,
   onForfeit,
   onPlayer1BetChange,
-  onPlayer2BetChange
+  onPlayer2BetChange,
+  suggestedMove = null
 }) => {
+  // State for custom arrows to show suggested moves
+  const [customArrows, setCustomArrows] = useState<any[]>([]);
+
+  // Update arrows when a suggested move is received
+  useEffect(() => {
+    if (suggestedMove) {
+      // Arrow format: [from square, to square, { color (optional) }]
+      setCustomArrows([[
+        suggestedMove.from, 
+        suggestedMove.to, 
+        { color: 'rgba(124, 58, 237, 0.8)', width: 8 }
+      ]]);
+      
+      // Log the suggested move for troubleshooting
+      console.log('ChessGamePanel - Rendering suggested move arrow:', suggestedMove);
+    } else {
+      setCustomArrows([]);
+    }
+  }, [suggestedMove]);
+
   // Handle bet changes with fallbacks if handlers aren't provided
   const handlePlayer1BetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value) || 0;
@@ -67,7 +89,12 @@ const ChessGamePanel: React.FC<ChessGamePanelProps> = ({
   const getStatusMessage = () => {
     if (gameState === 'waiting') return 'Waiting for players to connect and place bets';
     if (gameState === 'betting') return 'Waiting for players to lock their escrow';
-    if (gameState === 'playing') return `${currentPlayer === 'white' ? 'White' : 'Black'}'s turn to move`;
+    if (gameState === 'playing') {
+      if (suggestedMove) {
+        return `${currentPlayer === 'white' ? 'White' : 'Black'}'s turn. Suggested move: ${suggestedMove.from} → ${suggestedMove.to}`;
+      }
+      return `${currentPlayer === 'white' ? 'White' : 'Black'}'s turn to move`;
+    }
     if (gameState === 'completed') {
       return winner === 'draw' 
         ? 'Game ended in a draw' 
@@ -90,6 +117,9 @@ const ChessGamePanel: React.FC<ChessGamePanelProps> = ({
             statusType === 'warning' ? 'bg-warning-500' : 'bg-dark-500'
           }`}></div>
           <span className="text-sm text-gray-300">{statusMessage}</span>
+          {suggestedMove && (
+            <span className="ml-auto text-xs text-purple-400">Suggested move shown</span>
+          )}
         </div>
       </div>
       
@@ -106,7 +136,9 @@ const ChessGamePanel: React.FC<ChessGamePanelProps> = ({
           customDarkSquareStyle={{ backgroundColor: '#1e293b' }} // secondary-800
           customLightSquareStyle={{ backgroundColor: '#334155' }} // secondary-600
           customDropSquareStyle={{ boxShadow: 'inset 0 0 1px 4px rgba(14, 165, 233, 0.5)' }} // primary-500
-          boardWidth={window.innerWidth > 1200 ? 600 : window.innerWidth > 768 ? 500 : 350}
+          boardWidth={window.innerWidth > 1280 ? 600 : window.innerWidth > 768 ? 500 : 350}
+          customArrows={customArrows}
+          arePremovesAllowed={false}
         />
       </div>
 
