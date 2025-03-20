@@ -125,13 +125,7 @@ export function useWalletConnection() {
       const walletPreface = player1Wallet.address.substring(0, 6) + "..." + 
                            player1Wallet.address.substring(player1Wallet.address.length - 4);
       
-      window.alert(
-        `IMPORTANT: Before connecting Player 2's wallet\n\n` +
-        `1. Open your Petra wallet extension\n` +
-        `2. Currently, Player 1 is using wallet: ${walletPreface}\n` +
-        `3. Switch to a DIFFERENT account in your Petra wallet\n` +
-        `4. Then click OK to continue connecting`
-      );
+     
     }
     
     // Now try to connect Player 2's wallet

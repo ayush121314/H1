@@ -52,55 +52,102 @@ const ChessGamePanel: React.FC<ChessGamePanelProps> = ({
     }
   };
 
+  // Get status type and message for styling
+  const getStatusType = () => {
+    if (gameState === 'completed') {
+      return winner === 'draw' ? 'info' : 'success';
+    } else if (gameState === 'playing') {
+      return 'info';
+    } else if (gameState === 'betting') {
+      return 'warning';
+    }
+    return 'waiting';
+  };
+
+  const getStatusMessage = () => {
+    if (gameState === 'waiting') return 'Waiting for players to connect and place bets';
+    if (gameState === 'betting') return 'Waiting for players to lock their escrow';
+    if (gameState === 'playing') return `${currentPlayer === 'white' ? 'White' : 'Black'}'s turn to move`;
+    if (gameState === 'completed') {
+      return winner === 'draw' 
+        ? 'Game ended in a draw' 
+        : `${winner === 'player1' ? 'Player 1 (White)' : 'Player 2 (Black)'} won!`;
+    }
+    return 'Unknown game state';
+  };
+
+  const statusType = getStatusType();
+  const statusMessage = getStatusMessage();
+
   return (
-    <div className="bg-white p-4 rounded shadow">
-      <div className="mb-4">
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-          <h3 className="text-lg font-semibold text-blue-800">Game Status</h3>
-          <p className="text-blue-700">
-            {gameState === 'waiting' && 'Waiting for players to connect and place bets'}
-            {gameState === 'betting' && 'Waiting for players to lock their escrow'}
-            {gameState === 'playing' && `${currentPlayer === 'white' ? 'White' : 'Black'}'s turn to move`}
-            {gameState === 'completed' && (winner === 'draw' 
-              ? 'Game ended in a draw' 
-              : `${winner === 'player1' ? 'Player 1 (White)' : 'Player 2 (Black)'} won!`)}
-          </p>
+    <div className="panel bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 p-0 relative overflow-hidden">
+      {/* Game status bar */}
+      <div className="p-2 bg-dark-800/80">
+        <div className="flex items-center">
+          <div className={`w-2 h-2 rounded-full mr-2 ${
+            statusType === 'success' ? 'bg-accent-500' : 
+            statusType === 'info' ? 'bg-primary-500' : 
+            statusType === 'warning' ? 'bg-warning-500' : 'bg-dark-500'
+          }`}></div>
+          <span className="text-sm text-gray-300">{statusMessage}</span>
         </div>
+      </div>
+      
+      {/* Main chess board - make it larger for the P2P layout */}
+      <div className="chess-board-p2p">
+        <Chessboard
+          position={game.fen()}
+          onPieceDrop={onDrop}
+          boardOrientation="white"
+          customBoardStyle={{
+            borderRadius: '4px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+          }}
+          customDarkSquareStyle={{ backgroundColor: '#1e293b' }} // secondary-800
+          customLightSquareStyle={{ backgroundColor: '#334155' }} // secondary-600
+          customDropSquareStyle={{ boxShadow: 'inset 0 0 1px 4px rgba(14, 165, 233, 0.5)' }} // primary-500
+          boardWidth={window.innerWidth > 1200 ? 600 : window.innerWidth > 768 ? 500 : 350}
+        />
       </div>
 
       {/* Unified Betting Interface - Show when both wallets are connected and in waiting state */}
       {gameState === 'waiting' && player1Wallet && player2Wallet && (
-        <div className="mb-6 p-4 border border-yellow-200 bg-yellow-50 rounded">
-          <h3 className="text-lg font-bold text-center mb-3">Announce Bets</h3>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <p className="font-medium text-center mb-1">Player 1 Bet</p>
-              <div className="flex items-center justify-center">
+        <div className="betting-controls p-3 bg-dark-800/80">
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="glass-card p-2 bg-dark-800/80">
+              <div className="flex items-center mb-1">
+                <div className="w-2 h-2 rounded-full bg-primary-500 mr-1"></div>
+                <p className="text-xs font-medium text-gray-300">P1 Bet</p>
+              </div>
+              <div className="flex items-center">
                 <input
                   type="number"
                   min="0.1"
                   step="0.1"
                   value={player1Bet}
                   onChange={handlePlayer1BetChange}
-                  className="p-2 border rounded w-full text-center"
-                  placeholder="Enter amount"
+                  className="input-field w-full text-center text-sm py-1"
+                  placeholder="Enter"
                 />
-                <span className="ml-2">APT</span>
+                <span className="ml-1 font-mono text-xs text-gray-400">APT</span>
               </div>
             </div>
-            <div>
-              <p className="font-medium text-center mb-1">Player 2 Bet</p>
-              <div className="flex items-center justify-center">
+            <div className="glass-card p-2 bg-dark-800/80">
+              <div className="flex items-center mb-1">
+                <div className="w-2 h-2 rounded-full bg-secondary-500 mr-1"></div>
+                <p className="text-xs font-medium text-gray-300">P2 Bet</p>
+              </div>
+              <div className="flex items-center">
                 <input
                   type="number"
                   min="0.1"
                   step="0.1"
                   value={player2Bet}
                   onChange={handlePlayer2BetChange}
-                  className="p-2 border rounded w-full text-center"
-                  placeholder="Enter amount"
+                  className="input-field w-full text-center text-sm py-1"
+                  placeholder="Enter"
                 />
-                <span className="ml-2">APT</span>
+                <span className="ml-1 font-mono text-xs text-gray-400">APT</span>
               </div>
             </div>
           </div>
@@ -108,57 +155,44 @@ const ChessGamePanel: React.FC<ChessGamePanelProps> = ({
           <button 
             onClick={onAnnounceUnifiedBet}
             disabled={!player1Wallet || !player2Wallet || player1Bet <= 0 || player2Bet <= 0}
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-bold text-lg"
+            className="btn-accent w-full py-2 text-sm font-medium flex items-center justify-center"
           >
             Announce Bets & Calculate Minimum
           </button>
-          <p className="text-xs text-center text-gray-600 mt-2">
-            This will calculate the minimum bet amount from both players
-          </p>
         </div>
       )}
 
-      <div className="mb-4 aspect-square max-w-md mx-auto">
-        <Chessboard
-          position={game.fen()}
-          onPieceDrop={onDrop}
-          boardOrientation="white"
-        />
-      </div>
-
-      {gameState === 'playing' && (
-        <div className="text-center">
-          <p className="mb-2 text-lg font-semibold">
-            Current Player: {currentPlayer === 'white' ? 'White (Player 1)' : 'Black (Player 2)'}
-          </p>
-          <p className="mb-4 text-gray-600">
-            Total Pool: {finalBetAmount} APT
-          </p>
-          <button 
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded mr-2"
-            onClick={onForfeit}
-          >
-            Forfeit
-          </button>
-        </div>
-      )}
-
-      {gameState === 'completed' && (
-        <div className="text-center mt-4">
-          <h3 className="text-xl font-bold mb-2">
-            {winner === 'draw' ? 'Game Ended in a Draw' : `${winner === 'player1' ? 'Player 1' : 'Player 2'} Wins!`}
-          </h3>
-          <p className="mb-4">
-            {winner === 'draw' 
-              ? 'Both players receive their bets back' 
-              : `${winner === 'player1' ? 'Player 1' : 'Player 2'} receives ${finalBetAmount} APT`}
-          </p>
+      {/* Game control buttons (hidden in waiting state) */}
+      {gameState !== 'waiting' && (
+        <div className="game-controls p-3 border-t border-dark-700 flex justify-between">
           <button
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
             onClick={onStartNewGame}
+            className="btn-primary text-sm py-1.5 px-3"
+            disabled={gameState !== 'completed'}
           >
-            Start New Game
+            New Game
           </button>
+          
+          {gameState === 'playing' && (
+            <button
+              onClick={onForfeit}
+              className="btn-danger text-sm py-1.5 px-3"
+            >
+              Forfeit
+            </button>
+          )}
+          
+          {gameState === 'completed' && winner && (
+            <div className="flex items-center">
+              <span className="text-xs text-gray-400 mr-2">Winner:</span>
+              <span className={`text-sm font-medium ${winner === 'player1' ? 'text-primary-400' : winner === 'player2' ? 'text-secondary-400' : 'text-gray-400'}`}>
+                {winner === 'player1' ? 'Player 1' : winner === 'player2' ? 'Player 2' : 'Draw'}
+              </span>
+              <span className="ml-2 text-xs text-accent-400">
+                {winner !== 'draw' && `+${finalBetAmount} APT`}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -19,14 +19,17 @@ export class EscrowContractAdapter {
   
   constructor(
     nodeUrl: string,
-    moduleAddress: string = '0x72e87c94e15ee1a95d23486984c9914849399a775e9ae4006b3b230c990a4cc0', // Newly deployed module address
+    moduleAddress: string, // Removed default value - must be provided explicitly
   ) {
     this.client = new AptosClient(nodeUrl);
     this.moduleAddress = moduleAddress;
+    // No longer setting escrow address to module address by default
+    console.log("Adapter created with module address:", moduleAddress);
   }
   
   // Set the escrow contract address
   public setEscrowAddress(address: string): void {
+    console.log(`Setting escrow address to: ${address}`);
     this.escrowAddress = address;
   }
   
@@ -35,22 +38,42 @@ export class EscrowContractAdapter {
     return this.escrowAddress;
   }
   
-  // Create a new escrow contract
-  public async createEscrow(
+  // Initialize a new escrow contract using any wallet
+  public async initializeEscrow(
     sender: any, // Wallet instance
     player1Address: string,
     player2Address: string,
     minimumBet: number,
-    arbiterAddress: string,
     timeoutSeconds: number = 24 * 60 * 60, // 24 hours in seconds
   ): Promise<string | null> {
     try {
       // Convert APT to octas (smallest unit) - 1 APT = 10^8 Octas
       const minimumBetOctas = (minimumBet * 100000000).toString();
       
+      // Get the wallet address to set as escrow (could be a completely new wallet)
+      let walletAddress;
+      
+      // Try different wallet API styles to get the address
+      if (sender.account) {
+        // Standard Petra wallet
+        const response = await sender.account();
+        walletAddress = response.address;
+      } else if (typeof window !== 'undefined' && window.aptos) {
+        // window.aptos API
+        const response = await window.aptos.connect();
+        walletAddress = response.address;
+      } else {
+        throw new Error("Could not determine wallet address");
+      }
+      
+      console.log(`Using wallet as escrow: ${walletAddress}`);
+      
+      // Use the moduleAddress as the arbiter for simplicity
+      const arbiterAddress = this.moduleAddress;
+      
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::create_escrow`,
+        function: `${this.moduleAddress}::chess_escrow::create_escrow`,
         type_arguments: [],
         arguments: [
           player1Address,
@@ -61,19 +84,21 @@ export class EscrowContractAdapter {
         ]
       };
       
-      const response = await this.submitTransaction(sender, payload);
+      console.log("Initializing escrow with payload:", JSON.stringify(payload, null, 2));
       
-      if (response && response.hash) {
-        // In a real implementation, we'd need to query the chain to get the address
-        // of the newly created escrow resource. Here, we're simplifying by
-        // assuming it's the sender's address (which is where the resource is stored).
-        this.escrowAddress = sender.address;
-        return sender.address;
+      const txResponse = await this.submitTransaction(sender, payload);
+      
+      if (txResponse && txResponse.hash) {
+        // Set the escrow address to the wallet address that initialized it
+        this.escrowAddress = walletAddress;
+        console.log(`Escrow initialized with address: ${walletAddress}`);
+        console.log(`Transaction hash: ${txResponse.hash}`);
+        return walletAddress;
       }
       
       return null;
     } catch (error) {
-      console.error("Error creating escrow:", error);
+      console.error("Error initializing escrow:", error);
       throw error;
     }
   }
@@ -93,7 +118,7 @@ export class EscrowContractAdapter {
       
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::deposit`,
+        function: `${this.moduleAddress}::escrow::deposit`,
         type_arguments: [],
         arguments: [this.escrowAddress, amountInOctas]
       };
@@ -118,7 +143,7 @@ export class EscrowContractAdapter {
     try {
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::sign_to_start_game`,
+        function: `${this.moduleAddress}::escrow::sign_to_start_game`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       };
@@ -132,7 +157,7 @@ export class EscrowContractAdapter {
     }
   }
   
-  // Complete the game with a winner
+  // Complete the game with a winner - includes automatic fund release
   public async completeGame(
     sender: any, // Wallet instance
     winnerAddress: string,
@@ -141,15 +166,38 @@ export class EscrowContractAdapter {
       throw new Error("Escrow address not set");
     }
     
+    console.log(`Completing game with winner: ${winnerAddress}`);
+    console.log(`Using escrow address: ${this.escrowAddress}`);
+    
     try {
+      // Verify wallet connection
+      if (typeof window !== 'undefined' && window.aptos) {
+        const walletInfo = await window.aptos.connect();
+        console.log(`Connected wallet for transaction: ${walletInfo.address}`);
+      }
+      
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::complete_game`,
+        function: `${this.moduleAddress}::escrow::complete_game`,
         type_arguments: [],
         arguments: [this.escrowAddress, winnerAddress]
       };
       
       const response = await this.submitTransaction(sender, payload);
+      
+      // Automatically release funds without requiring approval
+      if (response && response.hash) {
+        console.log("Game completed, funds will be automatically transferred to the winner");
+        console.log("Transaction hash:", response.hash);
+        
+        // Wait for the transaction to be confirmed before releasing funds
+        await this.client.waitForTransactionWithResult(response.hash);
+        try {
+          await this.releaseFunds(sender);
+        } catch (error) {
+          console.error("Error releasing funds automatically, may need manual release:", error);
+        }
+      }
       
       return !!response && !!response.hash;
     } catch (error) {
@@ -158,7 +206,7 @@ export class EscrowContractAdapter {
     }
   }
   
-  // Complete the game as a draw
+  // Complete the game as a draw - includes automatic fund release
   public async completeGameAsDraw(
     sender: any, // Wallet instance
   ): Promise<boolean> {
@@ -166,15 +214,38 @@ export class EscrowContractAdapter {
       throw new Error("Escrow address not set");
     }
     
+    console.log(`Completing game as draw`);
+    console.log(`Using escrow address: ${this.escrowAddress}`);
+    
     try {
+      // Verify wallet connection
+      if (typeof window !== 'undefined' && window.aptos) {
+        const walletInfo = await window.aptos.connect();
+        console.log(`Connected wallet for transaction: ${walletInfo.address}`);
+      }
+      
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::complete_game_as_draw`,
+        function: `${this.moduleAddress}::escrow::complete_game_as_draw`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       };
       
       const response = await this.submitTransaction(sender, payload);
+      
+      // Automatically release funds without requiring approval
+      if (response && response.hash) {
+        console.log("Game completed as draw, funds will be automatically returned to players");
+        console.log("Transaction hash:", response.hash);
+        
+        // Wait for the transaction to be confirmed before releasing funds
+        await this.client.waitForTransactionWithResult(response.hash);
+        try {
+          await this.releaseFunds(sender);
+        } catch (error) {
+          console.error("Error releasing funds automatically, may need manual release:", error);
+        }
+      }
       
       return !!response && !!response.hash;
     } catch (error) {
@@ -194,12 +265,14 @@ export class EscrowContractAdapter {
     try {
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::release_funds`,
+        function: `${this.moduleAddress}::escrow::release_funds`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       };
       
+      // This transaction doesn't require approval - it's automated
       const response = await this.submitTransaction(sender, payload);
+      console.log("Funds released to the appropriate recipient(s)");
       
       return !!response && !!response.hash;
     } catch (error) {
@@ -220,7 +293,7 @@ export class EscrowContractAdapter {
     try {
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::raise_dispute`,
+        function: `${this.moduleAddress}::escrow::raise_dispute`,
         type_arguments: [],
         arguments: [this.escrowAddress, reason]
       };
@@ -247,7 +320,7 @@ export class EscrowContractAdapter {
     try {
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::resolve_dispute`,
+        function: `${this.moduleAddress}::escrow::resolve_dispute`,
         type_arguments: [],
         arguments: [this.escrowAddress, resolution.toString(), resolutionNotes]
       };
@@ -272,7 +345,7 @@ export class EscrowContractAdapter {
     try {
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::check_timeout`,
+        function: `${this.moduleAddress}::escrow::check_timeout`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       };
@@ -297,7 +370,7 @@ export class EscrowContractAdapter {
     try {
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::cancel_escrow`,
+        function: `${this.moduleAddress}::escrow::cancel_escrow`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       };
@@ -322,7 +395,7 @@ export class EscrowContractAdapter {
     try {
       const payload = {
         type: "entry_function_payload",
-        function: `${this.moduleAddress}::chess_escrow::escrow::refund_after_cancellation`,
+        function: `${this.moduleAddress}::escrow::refund_after_cancellation`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       };
@@ -349,7 +422,7 @@ export class EscrowContractAdapter {
     try {
       const resource = await this.client.getAccountResource(
         this.escrowAddress,
-        `${this.moduleAddress}::chess_escrow::escrow::GameEscrow`
+        `${this.moduleAddress}::escrow::GameEscrow`
       );
       
       if (resource && resource.data) {
@@ -371,7 +444,7 @@ export class EscrowContractAdapter {
     
     try {
       const result = await this.client.view({
-        function: `${this.moduleAddress}::chess_escrow::escrow::get_winner`,
+        function: `${this.moduleAddress}::escrow::get_winner`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       });
@@ -397,7 +470,7 @@ export class EscrowContractAdapter {
     
     try {
       const result = await this.client.view({
-        function: `${this.moduleAddress}::chess_escrow::escrow::get_escrow_balance`,
+        function: `${this.moduleAddress}::escrow::get_escrow_balance`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       });
@@ -422,7 +495,7 @@ export class EscrowContractAdapter {
     
     try {
       const result = await this.client.view({
-        function: `${this.moduleAddress}::chess_escrow::escrow::are_both_deposits_complete`,
+        function: `${this.moduleAddress}::escrow::are_both_deposits_complete`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       });
@@ -446,7 +519,7 @@ export class EscrowContractAdapter {
     
     try {
       const result = await this.client.view({
-        function: `${this.moduleAddress}::chess_escrow::escrow::get_minimum_bet`,
+        function: `${this.moduleAddress}::escrow::get_minimum_bet`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       });
@@ -475,7 +548,7 @@ export class EscrowContractAdapter {
     
     try {
       const result = await this.client.view({
-        function: `${this.moduleAddress}::chess_escrow::escrow::get_player_info`,
+        function: `${this.moduleAddress}::escrow::get_player_info`,
         type_arguments: [],
         arguments: [this.escrowAddress, playerAddress]
       });
@@ -503,7 +576,7 @@ export class EscrowContractAdapter {
     
     try {
       const result = await this.client.view({
-        function: `${this.moduleAddress}::chess_escrow::escrow::get_total_escrowed_amount`,
+        function: `${this.moduleAddress}::escrow::get_total_escrowed_amount`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       });
@@ -528,7 +601,7 @@ export class EscrowContractAdapter {
     
     try {
       const result = await this.client.view({
-        function: `${this.moduleAddress}::chess_escrow::escrow::get_game_time_remaining`,
+        function: `${this.moduleAddress}::escrow::get_game_time_remaining`,
         type_arguments: [],
         arguments: [this.escrowAddress]
       });
@@ -551,16 +624,20 @@ export class EscrowContractAdapter {
     payload: any
   ): Promise<any> {
     try {
-      // For Petra and similar wallets
-      if (sender.signAndSubmitTransaction) {
-        return await sender.signAndSubmitTransaction(payload);
-      }
-      
-      // For direct wallet API (window.aptos)
+      // For direct wallet API (window.aptos) - try this first
       if (typeof window !== 'undefined' && window.aptos) {
+        console.log("Using window.aptos wallet for transaction");
         return await window.aptos.signAndSubmitTransaction(payload);
       }
       
+      // For Petra and similar wallets
+      if (sender && sender.signAndSubmitTransaction) {
+        console.log("Using provided wallet for transaction");
+        return await sender.signAndSubmitTransaction(payload);
+      }
+      
+      // If we get here, no compatible wallet was found
+      console.error("No compatible wallet found for transaction");
       throw new Error("No compatible wallet found");
     } catch (error) {
       console.error("Transaction error:", error);
