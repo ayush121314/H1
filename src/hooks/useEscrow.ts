@@ -64,14 +64,25 @@ export function useEscrow() {
       console.log("Attempting to connect to Player 1's wallet for escrow initialization");
       
       // Show prompt for wallet connection
-      window.alert("Please make sure Player 1's wallet is selected in your Petra extension to initialize the escrow.");
+      window.alert("Please make sure a SEPARATE ESCROW wallet is selected in your Petra extension to initialize the escrow. This should NOT be the same as Player 1 or Player 2's wallet.");
       
       try {
         const response = await window.aptos.connect();
         
-        // Ensure it's Player 1's wallet
+        // Check if this wallet is the same as player 1 or player 2
         if (response && response.address === player1Wallet.address) {
-          console.log("Connected to correct wallet, creating escrow");
+          window.alert("Error: This wallet is the same as Player 1's wallet. Please select a different wallet for escrow.");
+          throw new Error("Escrow wallet cannot be the same as Player 1's wallet.");
+        }
+        
+        if (response && response.address === player2Wallet.address) {
+          window.alert("Error: This wallet is the same as Player 2's wallet. Please select a different wallet for escrow.");
+          throw new Error("Escrow wallet cannot be the same as Player 2's wallet.");
+        }
+        
+        // Proceed with escrow initialization
+        if (response && response.address) {
+          console.log("Connected to wallet, creating escrow");
           
           const initializeEscrowResult = await escrowAdapter.initializeEscrow(
             window.aptos,
@@ -89,7 +100,7 @@ export function useEscrow() {
           }
         } else {
           console.warn("Connected to wrong wallet address:", response?.address);
-          throw new Error(`Wrong wallet connected. Expected ${player1Wallet.address} but got ${response?.address}. Please make sure Player 1's wallet is selected.`);
+          throw new Error(`Failed to connect wallet. Please make sure a valid wallet is selected.`);
         }
       } catch (error: any) {
         console.error("Error with direct Petra connection:", error);
@@ -121,7 +132,10 @@ export function useEscrow() {
   }, [useSimulationMode, escrowAdapter]);
 
   // Connect escrow wallet
-  const connectEscrowWallet = useCallback(async () => {
+  const connectEscrowWallet = useCallback(async (
+    player1Wallet: PlayerWalletInfo | null,
+    player2Wallet: PlayerWalletInfo | null
+  ) => {
     setIsLoading(true);
     setError(null);
     
@@ -135,13 +149,24 @@ export function useEscrow() {
       }
       
       // Prompt to select the escrow wallet
-      window.alert("Please make sure your ESCROW wallet is selected in your Petra extension.");
+      window.alert("Please make sure your ESCROW wallet is selected in your Petra extension.\nIMPORTANT: This should be DIFFERENT from Player 1 and Player 2 wallets.");
       
       const response = await window.aptos.connect();
       console.log("Escrow wallet connection response:", response);
       
       if (response && response.address) {
         console.log("Connected to escrow wallet:", response.address);
+        
+        // Check if the wallet is the same as player 1 or player 2
+        if (player1Wallet && player1Wallet.address === response.address) {
+          window.alert("Error: This wallet is already being used by Player 1. Please select a different wallet for escrow.");
+          throw new Error("Escrow wallet cannot be the same as Player 1's wallet.");
+        }
+        
+        if (player2Wallet && player2Wallet.address === response.address) {
+          window.alert("Error: This wallet is already being used by Player 2. Please select a different wallet for escrow.");
+          throw new Error("Escrow wallet cannot be the same as Player 2's wallet.");
+        }
         
         // Set the escrow address in the adapter
         escrowAdapter.setEscrowAddress(response.address);
@@ -234,10 +259,30 @@ export function useEscrow() {
         setEscrowBalance(prevBalance => prevBalance + minimumBet);
       } else {
         // Real deposit by transferring funds to the escrow address
-        // Make sure the player's wallet is connected
-        const isWalletConnected = await ensureCorrectWalletConnected(playerNumber);
+        // Make sure the player's wallet is connected - strict verification
+        let maxAttempts = 3;
+        let isWalletConnected = false;
+        
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          isWalletConnected = await ensureCorrectWalletConnected(playerNumber);
+          
+          if (isWalletConnected) {
+            break;
+          }
+          
+          if (attempt < maxAttempts) {
+            // Ask if they want to try again
+            const shouldRetry = window.confirm(`Failed to connect the correct wallet for Player ${playerNumber}. Do you want to try again? (Attempt ${attempt}/${maxAttempts})`);
+            if (!shouldRetry) {
+              throw new Error(`Escrow locking cancelled - correct wallet for Player ${playerNumber} was not connected.`);
+            }
+          } else {
+            throw new Error(`Failed to connect the correct wallet for Player ${playerNumber} after ${maxAttempts} attempts.`);
+          }
+        }
+        
         if (!isWalletConnected) {
-          throw new Error(`Please connect the wallet for Player ${playerNumber} to continue`);
+          throw new Error(`Could not verify Player ${playerNumber}'s wallet. Please make sure the correct wallet is connected.`);
         }
         
         // Direct transfer to escrow address - using minimumBet instead of player's full bet
@@ -324,19 +369,61 @@ export function useEscrow() {
       
       // Only proceed if not in simulation mode and escrow is locked
       if (!useSimulationMode && escrowLocked && escrowAddress) {
+        // Verify escrow wallet - with retry mechanism
+        let maxAttempts = 3;
+        let escrowWalletConnected = null;
+        let isCorrectWallet = false;
+        
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          // Show clear instructions about which wallet to connect
+          window.alert(`Please select the ESCROW wallet (${escrowAddress.substring(0, 6)}...${escrowAddress.substring(escrowAddress.length - 4)}) in your Petra extension to transfer funds.
+          
+IMPORTANT: Only the escrow wallet can be used for this operation.`);
+          
+          try {
+            escrowWalletConnected = await window.aptos.connect();
+            
+            if (escrowWalletConnected && escrowWalletConnected.address === escrowAddress) {
+              isCorrectWallet = true;
+              console.log("Successfully connected to escrow wallet:", escrowWalletConnected.address);
+              break;
+            } else {
+              // Wrong wallet connected
+              window.alert(`Error: Wrong wallet connected. 
+              
+Expected the escrow wallet (${escrowAddress.substring(0, 6)}...${escrowAddress.substring(escrowAddress.length - 4)}) 
+
+but got a different wallet (${escrowWalletConnected?.address.substring(0, 6)}...${escrowWalletConnected?.address.substring(escrowWalletConnected.address.length - 4)}).`);
+              
+              if (attempt < maxAttempts) {
+                const shouldRetry = window.confirm(`Failed to connect the correct escrow wallet. Do you want to try again? (Attempt ${attempt}/${maxAttempts})`);
+                if (!shouldRetry) {
+                  throw new Error(`Operation cancelled - escrow wallet was not connected.`);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error connecting to wallet:", error);
+            if (attempt < maxAttempts) {
+              const shouldRetry = window.confirm(`Error connecting to wallet. Do you want to try again? (Attempt ${attempt}/${maxAttempts})`);
+              if (!shouldRetry) {
+                throw new Error(`Operation cancelled due to wallet connection error.`);
+              }
+            } else {
+              throw new Error(`Failed to connect wallet after ${maxAttempts} attempts.`);
+            }
+          }
+        }
+        
+        if (!isCorrectWallet) {
+          throw new Error("Failed to connect to the correct escrow wallet. Please ensure the correct wallet is selected.");
+        }
+        
         // Handle draw case
         if (winner === 'draw') {
           console.log("Draw game - returning funds to both players");
           
           // For a draw, return original bet amounts to each player
-          // Connect to escrow wallet first
-          window.alert("Please select the ESCROW wallet in your Petra extension to return funds.");
-          const escrowWalletConnected = await window.aptos.connect();
-          
-          if (!escrowWalletConnected || escrowWalletConnected.address !== escrowAddress) {
-            throw new Error("Failed to connect to escrow wallet. Please ensure the correct wallet is selected.");
-          }
-          
           // Return funds to Player 1
           if (player1Wallet) {
             console.log(`Returning ${player1Bet} APT to Player 1 from escrow`);
@@ -374,14 +461,6 @@ export function useEscrow() {
           }
           
           console.log(`Transferring ${finalBetAmount} APT to winner (${winnerWallet.address})`);
-          
-          // Connect to escrow wallet
-          window.alert("Please select the ESCROW wallet in your Petra extension to pay the winner.");
-          const escrowWalletConnected = await window.aptos.connect();
-          
-          if (!escrowWalletConnected || escrowWalletConnected.address !== escrowAddress) {
-            throw new Error("Failed to connect to escrow wallet. Please ensure the correct wallet is selected.");
-          }
           
           // Transfer all funds from escrow to winner
           const payload = {

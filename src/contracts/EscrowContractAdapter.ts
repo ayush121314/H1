@@ -66,6 +66,15 @@ export class EscrowContractAdapter {
         throw new Error("Could not determine wallet address");
       }
       
+      // Validate the escrow wallet is not the same as player wallets
+      if (walletAddress === player1Address) {
+        throw new Error("Escrow wallet cannot be the same as Player 1's wallet");
+      }
+      
+      if (walletAddress === player2Address) {
+        throw new Error("Escrow wallet cannot be the same as Player 2's wallet");
+      }
+      
       console.log(`Using wallet as escrow: ${walletAddress}`);
       
       // Use the moduleAddress as the arbiter for simplicity

@@ -399,7 +399,7 @@ export default function Home() {
               escrowBalance={escrowHook.escrowBalance}
               useSimulationMode={escrowHook.useSimulationMode}
               setUseSimulationMode={escrowHook.setUseSimulationMode}
-              onConnectEscrowWallet={escrowHook.connectEscrowWallet}
+              onConnectEscrowWallet={() => escrowHook.connectEscrowWallet(walletHook.player1Wallet, walletHook.player2Wallet)}
               onDisconnectEscrow={() => escrowHook.setEscrowAddress(null)}
               onCreateSimulatedEscrow={escrowHook.createSimulatedEscrow}
               onInitializeEscrow={handleInitializeEscrow}

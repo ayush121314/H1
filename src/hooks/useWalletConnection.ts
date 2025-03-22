@@ -73,17 +73,13 @@ export function useWalletConnection() {
           // Check if this wallet is already connected as the other player
           const otherPlayerWallet = playerNumber === 1 ? player2Wallet : player1Wallet;
           if (otherPlayerWallet && otherPlayerWallet.address === response.address) {
-            const confirmUse = window.confirm(
-              `WARNING: This wallet (${response.address.substring(0, 6)}...${response.address.substring(response.address.length - 4)}) is already connected as Player ${playerNumber === 1 ? '2' : '1'}.\n\n` +
-              `Using the same wallet for both players is NOT recommended for real games.\n\n` +
-              `Do you want to continue using this wallet for both players?`
+            // Block connection with error instead of asking for confirmation
+            window.alert(
+              `Error: This wallet (${response.address.substring(0, 6)}...${response.address.substring(response.address.length - 4)}) is already connected as Player ${playerNumber === 1 ? '2' : '1'}.\n\n` +
+              `Please connect a different wallet for Player ${playerNumber}. Go to your Petra extension and switch accounts first.`
             );
             
-            if (!confirmUse) {
-              throw new Error(`Please connect a different wallet for Player ${playerNumber}. Go to your Petra extension and switch accounts first.`);
-            }
-            
-            console.log(`User confirmed using the same wallet for both players: ${response.address}`);
+            throw new Error(`Cannot use the same wallet for both players. Please connect a different wallet for Player ${playerNumber}.`);
           }
           
           // Get wallet balance
@@ -125,7 +121,11 @@ export function useWalletConnection() {
       const walletPreface = player1Wallet.address.substring(0, 6) + "..." + 
                            player1Wallet.address.substring(player1Wallet.address.length - 4);
       
-     
+      window.alert(
+        `You're about to connect Player 2's wallet.\n\n` + 
+        `Player 1 is currently using wallet: ${walletPreface}\n\n` +
+        `IMPORTANT: Please make sure you've switched to a DIFFERENT wallet in your Petra extension before proceeding.`
+      );
     }
     
     // Now try to connect Player 2's wallet
@@ -183,6 +183,16 @@ export function useWalletConnection() {
     try {
       console.log(`Setting manual wallet address for Player ${playerNumber}: ${address}`);
       
+      // Check if this wallet is already connected as the other player
+      const otherPlayerWallet = playerNumber === 1 ? player2Wallet : player1Wallet;
+      if (otherPlayerWallet && otherPlayerWallet.address === address.trim()) {
+        window.alert(
+          `Error: This wallet address is already connected as Player ${playerNumber === 1 ? '2' : '1'}.\n\n` +
+          `Please enter a different address for Player ${playerNumber}.`
+        );
+        return;
+      }
+      
       // Create wallet info with the provided address
       // We'll assume a balance of 10 APT for testing purposes
       const walletInfo: PlayerWalletInfo = {
@@ -201,7 +211,7 @@ export function useWalletConnection() {
       console.error(`Error setting manual wallet for Player ${playerNumber}:`, error);
       setError(error.message || `Failed to set manual wallet for Player ${playerNumber}`);
     }
-  }, []);
+  }, [player1Wallet, player2Wallet]);
 
   // Function to ensure the correct wallet is connected
   const ensureCorrectWalletConnected = useCallback(async (playerNumber: 1 | 2) => {
@@ -210,12 +220,28 @@ export function useWalletConnection() {
     try {
       console.log(`Attempting to connect to Player ${playerNumber}'s wallet`);
       
+      // Get the expected wallet address for this player
+      const expectedWallet = playerNumber === 1 ? player1Wallet : player2Wallet;
+      
+      if (!expectedWallet) {
+        window.alert(`Player ${playerNumber}'s wallet is not connected yet. Please connect it first.`);
+        return false;
+      }
+      
       // Prompt user to switch to the correct wallet
-      window.alert(`Please make sure Player ${playerNumber}'s wallet is selected in your Petra extension.`);
+      window.alert(`Please make sure Player ${playerNumber}'s wallet (${expectedWallet.address.substring(0, 6)}...${expectedWallet.address.substring(expectedWallet.address.length - 4)}) is selected in your Petra extension.`);
       
       const response = await window.aptos.connect();
       if (response && response.address) {
         console.log(`Connected to wallet with address: ${response.address}`);
+        
+        // Verify the connected wallet matches the expected player's wallet
+        if (response.address !== expectedWallet.address) {
+          window.alert(`Error: Wrong wallet connected. Expected Player ${playerNumber}'s wallet (${expectedWallet.address.substring(0, 6)}...${expectedWallet.address.substring(expectedWallet.address.length - 4)}) but got a different wallet (${response.address.substring(0, 6)}...${response.address.substring(response.address.length - 4)}).`);
+          console.error(`Wrong wallet connected. Expected ${expectedWallet.address} but got ${response.address}`);
+          return false;
+        }
+        
         return true;
       } else {
         console.error("Failed to get wallet address");
@@ -225,7 +251,7 @@ export function useWalletConnection() {
       console.error(`Error connecting to Player ${playerNumber}'s wallet:`, error);
       return false;
     }
-  }, []);
+  }, [player1Wallet, player2Wallet]);
 
   return {
     player1Wallet,
