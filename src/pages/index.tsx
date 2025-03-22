@@ -303,6 +303,19 @@ export default function Home() {
                 Play AI Mode
               </button>
             </div>
+            <div 
+              className="panel bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 p-8 rounded-lg text-center cursor-pointer hover:shadow-lg transition-all"
+              onClick={() => window.location.href = '/coming-soon'}
+            >
+              <h2 className="text-2xl font-bold mb-4 text-gradient">Online Mode</h2>
+              <p className="text-gray-300 mb-6">Play and compete against the best in the world</p>
+              <svg className="w-24 h-24 mx-auto text-secondary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 2l9 7-9 7-9-7 9-7z" />
+              </svg>
+              <button className="mt-6 btn-secondary w-full py-3">
+                Play Challenger Mode
+              </button>
+            </div>
           </div>
         </div>
       </div>
