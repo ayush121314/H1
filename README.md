@@ -161,7 +161,7 @@ KnightChain/
 │   ├── contracts/             # Contract TypeScript interfaces
 │   │   ├── ChessEscrowContract.ts # Chess escrow contract interface
 │   │   ├── EscrowContractAdapter.ts # Adapter for escrow contract
-│   │   └── chess_escrow.move  # Move contract (duplicated from chess_escrow)
+│   │   └── chess_escrow.move  # Move contract 
 │   │
 │   ├── hooks/                 # Custom React hooks
 │   │   ├── useAIPlayer.ts     # Hook for AI player functionality
@@ -176,7 +176,6 @@ KnightChain/
 │   │   ├── coming-soon.tsx    # Coming soon page
 │   │   └── index.tsx          # Main application page
 │   │
-│   ├── server/                # Server-side code (empty)
 │   │
 │   ├── styles/                # CSS styles
 │   │   └── globals.css        # Global CSS styles
@@ -189,7 +188,6 @@ KnightChain/
 │       └── transactions.ts    # Transaction handlers
 │
 ├── .gitignore                 # Git ignore file
-├── hardhat.config.js          # Hardhat configuration (for Ethereum testing)
 ├── index.html                 # HTML entry point
 ├── index.tsx                  # Top-level React component
 ├── Move.toml                  # Move package configuration
