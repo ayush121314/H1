@@ -52,19 +52,6 @@ The intelligent agent ecosystem consists of three primary agent types:
    - Offers strategic tips customized to player skill level
    - Adapts difficulty based on player performance
 
-### Blockchain Integration
-
-The platform bridges to blockchain through two primary interfaces:
-
-1. **Aptos Integration (`src/utils/transactions.ts`)**:
-   - Direct interaction with Aptos blockchain
-   - Handles APT token transfers
-   - Manages Petra wallet integration
-
-2. **Contract Management (`src/utils/blockchain.ts`)**:
-   - Smart contract interaction layer
-   - Game creation, betting, and reward distribution
-   - Transaction management and verification
 
 -----------------------------------------------------------------------------------------
 
@@ -73,15 +60,13 @@ The platform bridges to blockchain through two primary interfaces:
 ### Prerequisites
 
 - Node.js (v16+)
-- Aptos CLI (for contract deployment)
 - Petra Wallet or compatible Aptos wallet
 
 ### Installation
 
 1. Clone the repository:
    ```bash
-   git clone [repository-url]
-   cd chess-gamefi
+   git clone https://github.com/ayush121314/KnightChain
    ```
 
 2. Install dependencies:
@@ -96,19 +81,6 @@ The platform bridges to blockchain through two primary interfaces:
 
 4. Open your browser and navigate to `http://localhost:3000`
 
-### Smart Contract Deployment
-
-1. Configure your Move.toml with your account address:
-   ```toml
-   [addresses]
-   chess_escrow = "YOUR_APTOS_ADDRESS"  // the one who is going to act as an escrow
-   ```
-
-2. Compile and deploy the contract:
-   ```bash
-   aptos move compile
-   aptos move publish
-   ```
 
 -----------------------------------------------------------------------------------------
 
@@ -130,11 +102,6 @@ The platform bridges to blockchain through two primary interfaces:
 3. Play against the AI, receiving real-time feedback and suggestions
 4. Review game analysis after completion to improve your skills
 
-### Market Participation
-
-1. View available betting pools in the Market tab
-2. Place bets on ongoing games or fund an escrow as a market maker
-3. Monitor your portfolio across various games
 
 -----------------------------------------------------------------------------------------
 
@@ -157,67 +124,87 @@ The platform bridges to blockchain through two primary interfaces:
 
 ```
 KnightChain/
+├── .git/                      # Git repository
+├── .next/                     # Next.js build output
+├── chess_escrow/              # Move smart contract module
+│   ├── .gitignore             # Git ignore file for contract directory
+│   ├── Move.toml              # Move package configuration
+│   └── sources/
+│       └── chess_escrow.move  # Move smart contract (empty placeholder)
 │
-├── .gitignore
-├── README.md
-├── package.json
-├── package-lock.json
-├── tsconfig.json
-├── tailwind.config.js
-├── postcss.config.js
-├── next.config.js
-├── Move.toml
+├── node_modules/              # NPM dependencies
+├── public/                    # Static assets
+│   └── coming_soon.jpg        # Coming soon image
 │
-├── public/
-│   └── assets/                # Static assets like images, icons, etc.
-│
-├── src/
-│   ├── agent/                 # Intelligent agents
-│   │   ├── ChessAIAgent.ts
-│   │   ├── ChessGameAgent.ts
-│   │   └── ChessTrainingAgent.ts
+├── src/                       # Source code
+│   ├── agent/                 # AI agent implementation
+│   │   ├── AIAgentService.ts  # AI agent service interface
+│   │   ├── ChessAIAgent.ts    # Manages betting & market making
+│   │   ├── ChessGameAgent.ts  # Handles gameplay-blockchain bridge
+│   │   ├── ChessTrainingAgent.ts  # Chess training assistant
+│   │   └── TrainingAgentService.ts # Training service
 │   │
 │   ├── components/            # React components
-│   │   ├── GameBoard.tsx
-│   │   ├── Header.tsx
-│   │   └── Footer.tsx
+│   │   ├── AIAgentPanel.tsx   # AI agent interface
+│   │   ├── AIVsPersonMode.tsx # AI vs. Person gameplay mode
+│   │   ├── BettingInterface.tsx # Betting interface
+│   │   ├── ChessGamePanel.tsx # Chess board and controls
+│   │   ├── DebugPanel.tsx     # Debug information panel
+│   │   ├── ErrorBoundary.tsx  # Error handling component
+│   │   ├── EscrowPanel.tsx    # Escrow management interface
+│   │   ├── GameDashboard.tsx  # Main game dashboard
+│   │   ├── GamePage.tsx       # Game page component
+│   │   ├── Layout.tsx         # Layout component
+│   │   ├── LoadingComponent.tsx # Loading indicator
+│   │   ├── PlayerPanel.tsx    # Player information panel
+│   │   └── TrainingPanel.tsx  # Training mode interface
 │   │
-│   ├── pages/                 # Next.js pages
-│   │   ├── index.tsx
-│   │   ├── game.tsx
-│   │   └── profile.tsx
-│   │
-│   ├── styles/                # CSS and styling
-│   │   └── globals.css
-│   │
-│   ├── utils/                 # Utility functions
-│   │   ├── transactions.ts
-│   │   └── blockchain.ts
+│   ├── contracts/             # Contract TypeScript interfaces
+│   │   ├── ChessEscrowContract.ts # Chess escrow contract interface
+│   │   ├── EscrowContractAdapter.ts # Adapter for escrow contract
+│   │   └── chess_escrow.move  # Move contract (duplicated from chess_escrow)
 │   │
 │   ├── hooks/                 # Custom React hooks
-│   │   └── useWallet.ts
+│   │   ├── useAIPlayer.ts     # Hook for AI player functionality
+│   │   ├── useBetting.ts      # Hook for betting functionality
+│   │   ├── useChessGame.ts    # Hook for chess game state
+│   │   ├── useEscrow.ts       # Hook for escrow functionality
+│   │   └── useWalletConnection.ts # Hook for wallet connection
 │   │
-│   └── context/               # React context for global state
-│       └── AppContext.tsx
+│   ├── pages/                 # Next.js pages
+│   │   ├── _app.tsx           # App component
+│   │   ├── _error.tsx         # Error page
+│   │   ├── coming-soon.tsx    # Coming soon page
+│   │   └── index.tsx          # Main application page
+│   │
+│   ├── server/                # Server-side code (empty)
+│   │
+│   ├── styles/                # CSS styles
+│   │   └── globals.css        # Global CSS styles
+│   │
+│   ├── types/                 # TypeScript type definitions
+│   │   └── game.ts            # Game-related type definitions
+│   │
+│   └── utils/                 # Utility functions
+│       ├── blockchain.ts      # Blockchain utilities
+│       └── transactions.ts    # Transaction handlers
 │
-├── chess_escrow/              # Move smart contracts
-│   └── chess_escrow.move
-│
-└── tests/                     # Test files
-    ├── agent/
-    ├── components/
-    ├── pages/
-    └── utils/
+├── .gitignore                 # Git ignore file
+├── hardhat.config.js          # Hardhat configuration (for Ethereum testing)
+├── index.html                 # HTML entry point
+├── index.tsx                  # Top-level React component
+├── Move.toml                  # Move package configuration
+├── next-env.d.ts              # Next.js TypeScript declarations
+├── next.config.js             # Next.js configuration
+├── package-lock.json          # NPM lock file
+├── package.json               # NPM package configuration
+├── postcss.config.js          # PostCSS configuration
+├── README.md                  # Project documentation
+├── styles.css                 # CSS styles (root level)
+├── tailwind.config.js         # Tailwind CSS configuration
+├── tsconfig.json              # TypeScript configuration
+└── tsconfig.tsbuildinfo       # TypeScript build information
 ```
-
-### Extending the Platform
-
-To add new features to the platform:
-
-1. **New Agent Types**: Create new agent classes in `src/agent/` following the existing patterns
-2. **Additional Game Types**: Extend the escrow contract to support different game types
-3. **Cross-Game Features**: Implement new methods in ChessAIAgent for managing assets across games
-4. **NFTs Based Reward System**: Apart from bet wins, award NFTs to the winners as a proof of their victory
 
 -----------------------------------------------------------------------------------------
 
@@ -233,7 +220,7 @@ To add new features to the platform:
 
 ## Security Considerations
 
-- The escrow contract includes timeout and dispute resolution mechanisms
+
 - All player funds are secured through smart contracts during gameplay
 - Agents operate with limited permissions and cannot withdraw funds without authorization
 
