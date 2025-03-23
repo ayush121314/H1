@@ -1,8 +1,8 @@
-# ChessGames: Intelligent Agents on Aptos Blockchain
+# KnightChain: Intelligent Agents on Aptos Blockchain
 
 ## Overview
 
-ChessGames is a blockchain-enabled chess gaming platform built on the Aptos blockchain that incorporates intelligent agents for in-game asset management, play-to-earn optimization, and facilitation of cross-game economies. The platform leverages Move smart contracts for secure escrow services and transparent gameplay verification while using AI agents that serve dual roles as both players and market makers within the ecosystem.
+KnightChain is a blockchain-enabled chess gaming platform built on the Aptos blockchain that incorporates intelligent agents for in-game asset management, play-to-earn optimization, and facilitation of cross-game economies. The platform leverages Move smart contracts for secure escrow services and transparent gameplay verification while using AI agents that serve dual roles as both players and market makers within the ecosystem.
 
 -----------------------------------------------------------------------------------------
 
@@ -15,28 +15,21 @@ ChessGames is a blockchain-enabled chess gaming platform built on the Aptos bloc
   - **ChessGameAgent**: Connects gameplay with blockchain infrastructure
   - **ChessTrainingAgent**: Provides training and analysis for skill improvement
 - **Wallet Integration**: Supports Petra and other Aptos-compatible wallets to support transactions
-- **NFT Integration**: Winners receive commemorative NFTs for their victories
 
 -----------------------------------------------------------------------------------------
 
 ## Technical Architecture
 
------------------------------------------------------------------------------------------
-
 ### Smart Contracts
 
-The platform is built on two primary Move smart contracts:
+The platform is built on Move smart contracts:
 
-1. **`chess_escrow.move`**: Manages the escrow system for chess game stakes, including:
+**`chess_escrow.move`**: Manages the escrow system for chess game stakes, including:
    - Player deposits and withdrawals
    - Game status management (pending, funded, playing, completed)
    - Winner verification and prize distribution
    - Dispute resolution mechanisms
 
-2. **`chess_nft.move`**: Handles NFT creation and management for game outcomes
-    - Once the game ends, the winner can mint an NFT to celebrate his victory.
-
------------------------------------------------------------------------------------------
 
 ### Intelligent Agent System
 
@@ -58,8 +51,6 @@ The intelligent agent ecosystem consists of three primary agent types:
    - Analyzes player moves for improvement
    - Offers strategic tips customized to player skill level
    - Adapts difficulty based on player performance
-
------------------------------------------------------------------------------------------
 
 ### Blockchain Integration
 
@@ -150,45 +141,74 @@ The platform bridges to blockchain through two primary interfaces:
 ## Architecture Diagram
 
 ```
-+------------------+     +------------------+     +------------------+
-| React Chess UI   | <-> | Agent System     | <-> | Aptos Blockchain |
-| - Game Interface |     | - ChessAIAgent   |     | - Move Contracts |
-| - Wallet Connect |     | - ChessGameAgent |     | - Token Transfer |
-| - Bet Management |     | - TrainingAgent  |     | - NFT Minting    |
-+------------------+     +------------------+     +------------------+
++------------------+     +------------------+     +--------------------+
+| React Chess UI   | <-> | Agent System     | <-> | Aptos Blockchain   |
+| - Game Interface |     | - ChessAIAgent   |     | - Move Contracts   |
+| - Wallet Connect |     | - ChessGameAgent |     | - Token Transfer   |
+| - Bet Management |     | - TrainingAgent  |     | - Balance Updation |
++------------------+     +------------------+     +--------------------+
 ```
 
 -----------------------------------------------------------------------------------------
 
 ## Development
 
------------------------------------------------------------------------------------------
-
 ### Project Structure
 
 ```
-chess-gamefi/
-├── chess_escrow/          # Move contract modules
-│   └── sources/
-│       ├── chess_escrow.move
-│       └── chess_nft.move
+KnightChain/
+│
+├── .gitignore
+├── README.md
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+├── tailwind.config.js
+├── postcss.config.js
+├── next.config.js
+├── Move.toml
+│
+├── public/
+│   └── assets/                # Static assets like images, icons, etc.
+│
 ├── src/
-│   ├── agent/             # Intelligent agent implementations
+│   ├── agent/                 # Intelligent agents
 │   │   ├── ChessAIAgent.ts
 │   │   ├── ChessGameAgent.ts
 │   │   └── ChessTrainingAgent.ts
-│   ├── components/        # React components
-│   ├── pages/             # Application pages
-│   ├── utils/             # Utility functions
-│   │   ├── blockchain.ts  # Blockchain interaction
-│   │   └── transactions.ts # Aptos transaction handling
-│   └── styles/            # CSS and styling
-├── index.html             # Main HTML entry
-├── index.tsx              # Main React entry point
-└── Move.toml              # Move configuration
+│   │
+│   ├── components/            # React components
+│   │   ├── GameBoard.tsx
+│   │   ├── Header.tsx
+│   │   └── Footer.tsx
+│   │
+│   ├── pages/                 # Next.js pages
+│   │   ├── index.tsx
+│   │   ├── game.tsx
+│   │   └── profile.tsx
+│   │
+│   ├── styles/                # CSS and styling
+│   │   └── globals.css
+│   │
+│   ├── utils/                 # Utility functions
+│   │   ├── transactions.ts
+│   │   └── blockchain.ts
+│   │
+│   ├── hooks/                 # Custom React hooks
+│   │   └── useWallet.ts
+│   │
+│   └── context/               # React context for global state
+│       └── AppContext.tsx
+│
+├── chess_escrow/              # Move smart contracts
+│   └── chess_escrow.move
+│
+└── tests/                     # Test files
+    ├── agent/
+    ├── components/
+    ├── pages/
+    └── utils/
 ```
-
------------------------------------------------------------------------------------------
 
 ### Extending the Platform
 
@@ -197,6 +217,7 @@ To add new features to the platform:
 1. **New Agent Types**: Create new agent classes in `src/agent/` following the existing patterns
 2. **Additional Game Types**: Extend the escrow contract to support different game types
 3. **Cross-Game Features**: Implement new methods in ChessAIAgent for managing assets across games
+4. **NFTs Based Reward System**: Apart from bet wins, award NFTs to the winners as a proof of their victory
 
 -----------------------------------------------------------------------------------------
 
@@ -216,9 +237,13 @@ To add new features to the platform:
 - All player funds are secured through smart contracts during gameplay
 - Agents operate with limited permissions and cannot withdraw funds without authorization
 
+-----------------------------------------------------------------------------------------
+
 ## License
 
 This project is not supposed to be copied by anyone for any official/non-official purposes apart from the contributors without prior information to the Repo creator.
+
+-----------------------------------------------------------------------------------------
 
 ## Contact
 
