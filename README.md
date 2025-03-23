@@ -130,7 +130,7 @@ KnightChain/
 │   ├── .gitignore             # Git ignore file for contract directory
 │   ├── Move.toml              # Move package configuration
 │   └── sources/
-│       └── chess_escrow.move  # Move smart contract (empty placeholder)
+│       └── chess_escrow.move  # Move smart contract 
 │
 ├── node_modules/              # NPM dependencies
 ├── public/                    # Static assets
